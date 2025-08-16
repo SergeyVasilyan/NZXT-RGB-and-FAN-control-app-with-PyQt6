@@ -1,16 +1,27 @@
 #!/usr/bin/env python3
 """Own NZXT Fan Control GUI application."""
 
+import json
 import os
 import sys
-import requests
-import json
 import time
-
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
+
+import requests
 from liquidctl import find_liquidctl_devices
+from PyQt6.QtCore import (
+    QEvent,
+    QObject,
+    QRect,
+    QRegularExpression,
+    QSize,
+    Qt,
+    QThread,
+    QTimer,
+    pyqtSignal,
+)
 from PyQt6.QtGui import (
     QAction,
     QCloseEvent,
@@ -20,18 +31,7 @@ from PyQt6.QtGui import (
     QIcon,
     QPalette,
     QRegularExpressionValidator,
-    QWindowStateChangeEvent
-)
-from PyQt6.QtCore import (
-    QEvent,
-    QObject,
-    QRegularExpression,
-    QTimer,
-    Qt,
-    QSize,
-    QRect,
-    QThread,
-    pyqtSignal
+    QWindowStateChangeEvent,
 )
 from PyQt6.QtWidgets import (
     QApplication,
@@ -111,7 +111,7 @@ class ImportSignal(QObject):
 @dataclass
 class ServerConfiguration:
     """Server Configuration."""
-    
+
     ip: str = "192.168.10.17"
     port: int = 8085
     rate: float = 1.0
@@ -139,7 +139,7 @@ class SettingsDialog(QDialog):
             return
         try:
             port: int = port_text
-            if not (1 <= port <= 65535):
+            if not 1 <= port <= 65535:
                 raise ValueError
         except ValueError:
             QMessageBox.warning(self, "Invalid Port",
@@ -205,6 +205,7 @@ class SettingsDialog(QDialog):
         self.setLayout(layout)
 
 class Worker(QThread):
+    """Worker thread that poll sensors temperature from the server at given rate."""
     temps: pyqtSignal = pyqtSignal(float, float)
 
     def __init__(self, config: ServerConfiguration, min_temp: float=30.) -> None:
@@ -310,7 +311,8 @@ class MainWindow(QMainWindow):
     def __create_file_menu(self, menu_bar: QMenuBar) -> None:
         """Create file menu section."""
         file_menu: QMenu = menu_bar.addMenu(QIcon(f"{self.__icons}/file.png"), "&File")
-        for action, trigger in [("export", self.__on_export_triggered), ("import", self.__on_import_triggered)]:
+        for action, trigger in [("export", self.__on_export_triggered),
+                                ("import", self.__on_import_triggered)]:
             qaction: QAction = QAction(QIcon(f"{self.__icons}/{action}.png"),
                                              f"&{action.title()}",
                                              file_menu)
@@ -487,12 +489,12 @@ class MainWindow(QMainWindow):
     @staticmethod
     def __update_slider_style(slider: QSlider, value: int) -> None:
         """Update given QSlider style."""
-        isEnabled: bool = slider.isEnabled()
+        is_enabled: bool = slider.isEnabled()
         cursor: Qt.CursorShape = Qt.CursorShape.ClosedHandCursor
-        if not isEnabled:
-           cursor = Qt.CursorShape.ForbiddenCursor
+        if not is_enabled:
+            cursor = Qt.CursorShape.ForbiddenCursor
         slider.setCursor(cursor)
-        lightness: int = 50 if isEnabled else 30
+        lightness: int = 50 if is_enabled else 30
         slider.setStyleSheet(f"""
             QSlider::groove:vertical {{
                 background: hsl(0, 0%, 0%);
@@ -516,7 +518,8 @@ class MainWindow(QMainWindow):
             }}
         """)
 
-    def __update_fan_speed(self, device_id: str, channel: str, value: int, fan_slider: QSlider) -> None:
+    def __update_fan_speed(self, device_id: str, channel: str, value: int,
+                                 fan_slider: QSlider) -> None:
         """Set Fan speed to corresponding value."""
         try:
             self.__devices[int(device_id)].set_fixed_speed(channel, value)
@@ -539,7 +542,8 @@ class MainWindow(QMainWindow):
         self.__sources[device_id] = sources[device_id]
 
     @staticmethod
-    def __get_channel_mode(new_modes: dict[str, Any]|ObservableDict, device_id: str, channel: str) -> str:
+    def __get_channel_mode(new_modes: dict[str, Any]|ObservableDict, device_id: str,
+                           channel: str) -> str:
         """Change Source box state."""
         device_modes: dict[str, Any] = new_modes[device_id]
         if not device_modes:
@@ -660,7 +664,6 @@ class MainWindow(QMainWindow):
             source_box.setCurrentText(current_text)
         source_layout.addWidget(source_box)
         self.__update_fan_source(device_id, channel, current_text)
-        
         mode_layout: QHBoxLayout = QHBoxLayout()
         mode_layout.addWidget(QLabel("Mode"))
         mode_box: QComboBox = QComboBox()
