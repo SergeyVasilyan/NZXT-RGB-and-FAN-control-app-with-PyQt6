@@ -43,7 +43,9 @@ from PyQt6.QtWidgets import (
     QMenu,
     QMenuBar,
     QMessageBox,
+    QSizePolicy,
     QSlider,
+    QSpacerItem,
     QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
@@ -502,7 +504,7 @@ class MainWindow(QMainWindow):
             new_temp: float = temps.get(source, 0)
             temp_label.setText(f"{new_temp} C")
             temp_label.setStyleSheet(f"color: hsl({100 - new_temp}, 100%, 50%);")
-            
+
         def update_name_label(names: dict[str, str]) -> None:
             """Update name label."""
             new_name: str = names.get(source, "N/A")
@@ -530,6 +532,28 @@ class MainWindow(QMainWindow):
                 temps_layout.addWidget(self.__create_separator())
         return temps_layout
 
+    def __create_ruler(self, min_val: int=0, max_val: int=100, step: int=10,
+                             left: bool=True) -> QVBoxLayout:
+        layout: QVBoxLayout = QVBoxLayout()
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
+        values: list[int] = list(reversed(range(min_val, max_val + 1, step)))
+        for i, value in enumerate(values):
+            step_layout: QHBoxLayout = QHBoxLayout()
+            label = QLabel(str(value))
+            alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignVCenter
+            alignment |= Qt.AlignmentFlag.AlignLeft if left else Qt.AlignmentFlag.AlignRight
+            if left:
+                step_layout.addWidget(label, alignment=alignment)
+                step_layout.addWidget(self.__create_separator(horizontal=True))
+            else:
+                step_layout.addWidget(self.__create_separator(horizontal=True))
+                step_layout.addWidget(label, alignment=alignment)
+            if i and i < len(values):
+                layout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Policy.Minimum,
+                                     QSizePolicy.Policy.Expanding))
+            layout.addLayout(step_layout)
+        return layout
 
     def __create_fan_slider(self, device_id: str, channel: str) -> QSlider:
         """Create FAN slider."""
@@ -595,8 +619,12 @@ class MainWindow(QMainWindow):
         fan_layout: QVBoxLayout = QVBoxLayout()
         channel_label: QLabel = self.__create_label(channel, target="channel")
         fan_layout.addWidget(channel_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+        slider_layout: QHBoxLayout = QHBoxLayout()
+        slider_layout.addLayout(self.__create_ruler())
         fan_slider: QSlider = self.__create_fan_slider(device_id, channel)
-        fan_layout.addWidget(fan_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
+        slider_layout.addWidget(fan_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
+        slider_layout.addLayout(self.__create_ruler(left=False))
+        fan_layout.addLayout(slider_layout)
         fan_layout.addLayout(self.__create_fan_settings(device_id, channel))
         return fan_layout
 
@@ -684,7 +712,6 @@ class MainWindow(QMainWindow):
                 3000
             )
         super().changeEvent(event)
-
 
 def main() -> int:
     """Start point."""
