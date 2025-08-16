@@ -66,4 +66,4 @@ This project is licensed under GPL-3.0. By contributing, you agree that your cod
 
 ## 💬 Need Help?
 
-Open an issue for bugs, questions, or feature requests. You can also start a discussion if you're unsure how best to contribute.
+Open an [issue](https://github.com/SergeyVasilyan/NZXT-RGB-and-FAN-control-app-with-PyQt6/issues) for bugs, questions, or feature requests. You can also start a discussion if you're unsure how best to contribute.
