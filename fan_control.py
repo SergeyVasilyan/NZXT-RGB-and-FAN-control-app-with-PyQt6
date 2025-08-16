@@ -3,6 +3,7 @@
 
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime
@@ -10,10 +11,6 @@ from typing import Any
 
 import requests
 from liquidctl import find_liquidctl_devices
-from src.application import Application
-from src.observable_dict import ObservableDict
-from src.settings_dialog import SettingsDialog, ServerConfiguration
-from src.theme_manager import ThemeManager
 from PyQt6.QtCore import (
     QEvent,
     QObject,
@@ -51,6 +48,11 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from src.application import Application
+from src.observable_dict import ObservableDict
+from src.settings_dialog import ServerConfiguration, SettingsDialog
+from src.theme_manager import ThemeManager
+
 
 class ImportSignal(QObject):
     """Simple import update signal."""
@@ -67,6 +69,7 @@ class ImportSignal(QObject):
 class Worker(QThread):
     """Worker thread that poll sensors temperature from the server at given rate."""
     temps: pyqtSignal = pyqtSignal(float, float)
+    names: pyqtSignal = pyqtSignal(str, str)
 
     def __init__(self, config: ServerConfiguration, min_temp: float=30.) -> None:
         """INIT."""
@@ -74,8 +77,10 @@ class Worker(QThread):
         self.__min_temp: float = min_temp
         self.__config: ServerConfiguration = config
 
-    def __get_temp(self) -> tuple[float, float]:
+    def __get_temp(self) -> tuple[str, float, str, float]:
         """Get CPU Core Average and GPU temperature from LibreHardwareMonitor server."""
+        cpu_name: str = "N/A"
+        gpu_name: str = "N/A"
         cpu_temp: float = self.__min_temp
         gpu_temp: float = self.__min_temp
         response: requests.Response|None = None
@@ -91,26 +96,30 @@ class Worker(QThread):
             for hw in data.get("Children", [{}])[0].get("Children", []):
                 if is_cpu_set and is_gpu_set:
                     break
-                if not is_cpu_set and "12th Gen Intel Core i9-12900K" in hw["Text"]:
+                if not is_cpu_set and re.search("(Intel|AMD)", hw["Text"]):
                     for sensor in hw["Children"]:
                         if "Temperatures" in sensor["Text"]:
                             for temp_sensor in sensor["Children"]:
                                 if "Core Average" in temp_sensor["Text"]:
+                                    cpu_name = hw["Text"]
                                     cpu_temp = float(temp_sensor["Value"].replace(" °C", ""))
                                     is_cpu_set = True
-                if not is_gpu_set and "NVIDIA GeForce RTX 4070 SUPER" in hw["Text"]:
+                if not is_gpu_set and re.search("(NVIDIA)", hw["Text"]):
                     for sensor in hw["Children"]:
                         if "Temperatures" in sensor["Text"]:
                             for temp_sensor in sensor["Children"]:
                                 if "GPU Core" in temp_sensor["Text"]:
+                                    gpu_name = hw["Text"]
                                     gpu_temp = float(temp_sensor["Value"].replace(" °C", ""))
                                     is_gpu_set = True
-        return cpu_temp, gpu_temp
+        return cpu_name, cpu_temp, gpu_name, gpu_temp
 
     def run(self):
         """Get CPU Core Average and GPU temperature from LibreHardwareMonitor server."""
         while True:
-            self.temps.emit(*self.__get_temp())
+            cpu_name, cpu_temp, gpu_name, gpu_temp = self.__get_temp()
+            self.temps.emit(cpu_temp, gpu_temp)
+            self.names.emit(cpu_name, gpu_name)
             time.sleep(self.__config.rate)
 
 class MainWindow(QMainWindow):
@@ -143,8 +152,13 @@ class MainWindow(QMainWindow):
             "AVG": self.__min_temp,
             "MAX": self.__min_temp,
         })
+        self.__names: ObservableDict = ObservableDict({
+            "CPU": "N/A",
+            "GPU": "N/A",
+        })
         self.__worker: Worker = Worker(self.__server_config, min_temp=self.__min_temp)
         self.__worker.temps.connect(self.__update_temps)
+        self.__worker.names.connect(self.__update_names)
         self.__worker.start()
         self.__update_signal: ImportSignal = ImportSignal()
         self.__tray_icon: QSystemTrayIcon
@@ -156,6 +170,13 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self.hide)
         else:
             self.show()
+
+    @staticmethod
+    def __force_refresh(widget: QWidget) -> None:
+        """Force refresh widget style."""
+        widget.style().unpolish(widget)
+        widget.style().polish(widget)
+        widget.update()
 
     def __create_icon(self, name: str) -> QIcon:
         """Create themed QIcon."""
@@ -170,13 +191,6 @@ class MainWindow(QMainWindow):
             painter.fillRect(pixmap.rect(), QColor("white" if "dark" in self.__theme  else "black"))
             painter.end()
         return QIcon(pixmap)
-
-    @staticmethod
-    def __force_refresh(widget: QWidget) -> None:
-        """Force refresh widget style."""
-        widget.style().unpolish(widget)
-        widget.style().polish(widget)
-        widget.update()
 
     def __create_label(self, text: str, size: str="", target: str="") -> QLabel:
         """Create QLabel with dynamic QSS."""
@@ -193,6 +207,14 @@ class MainWindow(QMainWindow):
             label.setProperty("for", target)
         self.__force_refresh(label)
         return label
+
+    @staticmethod
+    def __create_separator(horizontal: bool=False) -> QFrame:
+        separator: QFrame = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine if horizontal else QFrame.Shape.VLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        separator.setLineWidth(1)
+        return separator
 
     def __create_system_tray(self) -> None:
         """Create and setup system tray icon."""
@@ -382,12 +404,10 @@ class MainWindow(QMainWindow):
         self.__temps["AVG"] = (cpu + gpu) / 2
         self.__temps["MAX"] = max(cpu, gpu)
 
-    @staticmethod
-    def __update_temp_label(label: QLabel, new_temps: dict[str, float], source: str) -> None:
-        """Update temperature label."""
-        new_temp: float = new_temps.get(source, 0)
-        label.setText(f"{new_temp} C")
-        label.setStyleSheet(f"color: hsl({100 - new_temp}, 100%, 50%);")
+    def __update_names(self, cpu: str, gpu: str) -> None:
+        """Update CPU and GPU temperatures."""
+        self.__names["CPU"] = cpu
+        self.__names["GPU"] = gpu
 
     def __update_slider_style(self, slider: QSlider, value: int) -> None:
         """Update given QSlider style."""
@@ -475,23 +495,27 @@ class MainWindow(QMainWindow):
             slider.setValue(speed)
             self.__update_slider_style(slider, speed)
 
-    @staticmethod
-    def __create_separator(horizontal: bool=False) -> QFrame:
-        separator: QFrame = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine if horizontal else QFrame.Shape.VLine)
-        separator.setFrameShadow(QFrame.Shadow.Sunken)
-        separator.setLineWidth(1)
-        return separator
-
     def __create_temp_layout(self, source: str) -> QVBoxLayout:
         """Create Temp layout."""
+        def update_temp_label(temps: dict[str, float]) -> None:
+            """Update temperature label."""
+            new_temp: float = temps.get(source, 0)
+            temp_label.setText(f"{new_temp} C")
+            temp_label.setStyleSheet(f"color: hsl({100 - new_temp}, 100%, 50%);")
+            
+        def update_name_label(names: dict[str, str]) -> None:
+            """Update name label."""
+            new_name: str = names.get(source, "N/A")
+            name_label.setText(new_name)
+
         temp_layout: QVBoxLayout = QVBoxLayout()
         source_label: QLabel = self.__create_label(source, size="large", target="source")
-        temp_layout.addWidget(source_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+        name_label: QLabel = self.__create_label("N/A", size="small", target="source")
         temp_label: QLabel = self.__create_label(f"{self.__temps[source]} C", size="medium")
-        self.__temps.value_changed.connect(lambda new_temps: self.__update_temp_label(temp_label,
-                                                                                      new_temps,
-                                                                                      source))
+        self.__temps.value_changed.connect(lambda temps: update_temp_label(temps))
+        self.__names.value_changed.connect(lambda names: update_name_label(names))
+        temp_layout.addWidget(source_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+        temp_layout.addWidget(name_label, alignment=Qt.AlignmentFlag.AlignHCenter)
         temp_layout.addWidget(temp_label, alignment=Qt.AlignmentFlag.AlignHCenter)
         temp_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         return temp_layout
