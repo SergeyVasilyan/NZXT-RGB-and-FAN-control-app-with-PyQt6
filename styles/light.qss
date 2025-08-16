@@ -1,0 +1,94 @@
+QWidget[id=central] {
+    background-color: hsl(0, 0%, 100%);
+}
+
+QDialog {
+    background-color: hsl(0, 0%, 100%);
+}
+
+QPushButton {
+    background-color: hsl(0, 0%, 50%);
+}
+
+QPushButton:hover {
+    background-color: hsl(0, 0%, 60%);
+}
+
+QLineEdit {
+    background-color: hsl(0, 0%, 70%);
+    color: hsl(0, 0, 0%);
+}
+
+QComboBox {
+    background-color: hsl(0, 0%, 70%);
+    color: hsl(0, 0, 0%);
+}
+
+QComboBox::down-down {
+    width: 12px;
+    height: 12px;
+}
+
+QComboBox::down-arrow {
+    color: hsl(0, 0, 0%);
+    width: 12px;
+    height: 12px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: hsl(0, 0%, 70%);
+    color: hsl(0, 0, 0%);
+}
+
+QComboBox QAbstractItemView::item:hover {
+    background-color: hsl(0, 0%, 50%);
+    color: hsl(0, 0, 0%);
+}
+
+QSlider::groove:vertical {
+    border-radius: 5px;
+    width: 10px;
+    margin: 0px;
+}
+
+QSlider::sub-page:vertical {
+    background-color: hsl(0, 0%, 50%);
+}
+
+QLabel {
+    color: hsl(0, 0%, 0%);
+    font-family: Arial, Helvetica, sans-serif;
+}
+    
+QLabel[for=source] {
+    color: hsl(200, 100%, 50%);
+    font-weight: bold;
+}
+
+QLabel[for=device] {
+    color: hsl(284, 100%, 50%);
+    font-weight: bold;
+}
+QLabel[for=channel] {
+    color: hsl(200, 100%, 50%);
+}
+
+QMenuBar {
+    background-color: hsl(0, 0%, 70%);
+    color: hsl(0, 0%, 0%);
+}
+
+QMenu {
+    background-color: hsl(0, 0%, 50%);
+    color: hsl(0, 0%, 0%);
+}
+
+QMenu::item:hover {
+    background-color: hsl(0, 0%, 60%);
+    color: hsl(0, 0%, 0%);
+}
+
+QDoubleSpinBox {
+    background-color: hsl(0, 0%, 70%);
+    color: hsl(0, 0, 0%);
+}

@@ -5,17 +5,19 @@ import json
 import os
 import sys
 import time
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 import requests
 from liquidctl import find_liquidctl_devices
+from src.application import Application
+from src.observable_dict import ObservableDict
+from src.settings_dialog import SettingsDialog, ServerConfiguration
+from src.theme_manager import ThemeManager
 from PyQt6.QtCore import (
     QEvent,
     QObject,
     QRect,
-    QRegularExpression,
     QSize,
     Qt,
     QThread,
@@ -30,83 +32,25 @@ from PyQt6.QtGui import (
     QGuiApplication,
     QIcon,
     QPainter,
-    QPalette,
     QPixmap,
-    QRegularExpressionValidator,
     QWindowStateChangeEvent,
 )
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
-    QDialog,
-    QDoubleSpinBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMainWindow,
     QMenu,
     QMenuBar,
     QMessageBox,
-    QPushButton,
     QSlider,
     QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
 )
-
-
-class Application(QApplication):
-    """Main Application."""
-
-    def __init__(self) -> None:
-        """INIT."""
-        super().__init__([])
-        self.__styles: str = "styles.qss"
-        self.__load_stylesheet()
-
-    def __load_stylesheet(self) -> None:
-        """Load styles qss."""
-        try:
-            with open(self.__styles, "r") as f:
-                self.setStyleSheet(f.read())
-        except Exception as _:
-            return
-
-class ObservableDict(QObject):
-    """Custom Dict with onChange signal."""
-    value_changed: pyqtSignal = pyqtSignal(dict)
-
-    def __init__(self, initial: dict|None=None):
-        """INIT."""
-        super().__init__()
-        self.__data: dict[str, Any] = initial or {}
-
-    def __getitem__(self, key: str) -> Any:
-        """Get item from dict."""
-        return self.__data.get(key, None)
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        """Set value under given key in dict."""
-        self.update(key, value)
-
-    def __contains__(self, key: str) -> bool:
-        """Check if given key exists in dict."""
-        return key in self.__data
-
-    def __repr__(self) -> str:
-        """Print dict representation."""
-        return repr(self.__data)
-
-    def update(self, key: str, value: Any) -> None:
-        """Update dict value under given key."""
-        self.__data[key] = value
-        self.value_changed.emit(self.__data.copy())
-
-    def get_data(self) -> dict[str, Any]:
-        """Get whole dict."""
-        return self.__data.copy()
 
 class ImportSignal(QObject):
     """Simple import update signal."""
@@ -119,102 +63,6 @@ class ImportSignal(QObject):
     def update(self) -> None:
         """Trigger signal."""
         self.imported.emit()
-
-@dataclass
-class ServerConfiguration:
-    """Server Configuration."""
-
-    ip: str = "192.168.10.17"
-    port: int = 8085
-    rate: float = 1.0
-
-class SettingsDialog(QDialog):
-    """Simple Settings selection Dialog."""
-
-    def __init__(self, config: ServerConfiguration) -> None:
-        """INIT."""
-        super().__init__()
-        self.setWindowTitle("Settings")
-        self.setFixedSize(300, 150)
-        self.__ip_input: QLineEdit
-        self.__port_input: QLineEdit
-        self.__rate_spin_box: QDoubleSpinBox
-        self.__config: ServerConfiguration = config
-        self.__create_layout()
-
-    def __validate_inputs(self) -> None:
-        """Validate IP and PORT."""
-        ip_text: str = self.__ip_input.text()
-        port_text: int = int(self.__port_input.text())
-        if not self.__ip_input.hasAcceptableInput():
-            QMessageBox.warning(self, "Invalid IP", "Please enter a valid IPv4 address.")
-            return
-        try:
-            port: int = port_text
-            if not 1 <= port <= 65535:
-                raise ValueError
-        except ValueError:
-            QMessageBox.warning(self, "Invalid Port",
-                                "Port must be an integer between 1 and 65535.")
-            return
-        rate: float = round(self.__rate_spin_box.value(), 2)
-        self.__config.ip = ip_text
-        self.__config.port = port_text
-        self.__config.rate = rate
-        QMessageBox.information(self, "Success", f"IP: {ip_text}\nPort: {port_text}\nRate: {rate}")
-        self.close()
-
-    def __create_ip_section(self) -> QHBoxLayout:
-        """Create IP section."""
-        ip_layout: QHBoxLayout = QHBoxLayout()
-        ip_layout.addWidget(QLabel("IP Address:"))
-        self.__ip_input = QLineEdit()
-        self.__ip_input.setText(self.__config.ip)
-        self.__ip_input.setPlaceholderText("Enter IP address")
-        ip_regex: QRegularExpression = QRegularExpression(
-            r"^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)"
-            r"(\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)){3}$"
-        )
-        self.__ip_input.setValidator(QRegularExpressionValidator(ip_regex))
-        ip_layout.addWidget(self.__ip_input)
-        return ip_layout
-
-    def __create_port_section(self) -> QHBoxLayout:
-        """Create PORT section."""
-        port_layout: QHBoxLayout = QHBoxLayout()
-        port_layout.addWidget(QLabel("Port:"))
-        self.__port_input = QLineEdit()
-        self.__port_input.setText(str(self.__config.port))
-        self.__port_input.setPlaceholderText("Enter Port (1–65535)")
-        self.__port_input.setPlaceholderText("Enter IP address")
-        port_regex: QRegularExpression = QRegularExpression(
-            r"^(6553[0-5]|655[0-2]\d|65[0-4]\d{2}|6[0-4]\d{3}|[1-5]\d{4}|\d{1,4})$"
-        )
-        self.__port_input.setValidator(QRegularExpressionValidator(port_regex))
-        port_layout.addWidget(self.__port_input)
-        return port_layout
-
-    def __create_rate_section(self) -> QHBoxLayout:
-        """Create Rate section."""
-        rate_layout: QHBoxLayout = QHBoxLayout()
-        rate_layout.addWidget(QLabel("Rate (in seconds):"))
-        self.__rate_spin_box = QDoubleSpinBox()
-        self.__rate_spin_box.setRange(0.1, 10.0)
-        self.__rate_spin_box.setSingleStep(0.1)
-        self.__rate_spin_box.setValue(self.__config.rate)
-        rate_layout.addWidget(self.__rate_spin_box)
-        return rate_layout
-
-    def __create_layout(self) -> None:
-        """Create Dialog layout."""
-        layout: QVBoxLayout = QVBoxLayout()
-        layout.addLayout(self.__create_ip_section())
-        layout.addLayout(self.__create_port_section())
-        layout.addLayout(self.__create_rate_section())
-        submit_btn: QPushButton = QPushButton("Save")
-        submit_btn.clicked.connect(self.__validate_inputs)
-        layout.addWidget(submit_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
-        self.setLayout(layout)
 
 class Worker(QThread):
     """Worker thread that poll sensors temperature from the server at given rate."""
@@ -268,18 +116,20 @@ class Worker(QThread):
 class MainWindow(QMainWindow):
     """Main Window."""
 
-    def __init__(self, app_name: str="") -> None:
+    def __init__(self, app_name: str="", theme_manager: ThemeManager|None=None) -> None:
         """INIT."""
         super().__init__()
         self.__app_name: str = app_name
+        self.__theme_manager: ThemeManager = theme_manager
         self.__settings: str = "settings.json"
+        self.__theme: str = "dark"
         self.__modes: ObservableDict = ObservableDict()
         self.__sources: ObservableDict = ObservableDict()
         self.__server_config: ServerConfiguration = ServerConfiguration()
-        self.__dark_theme: bool = True
         self.__start_minimized: bool = False
         self.__minimize_on_exit: bool = False
         self.__load_settings()
+        self.__theme_manager.apply_theme(self.__theme)
         screen_size: QRect = QGuiApplication.primaryScreen().availableGeometry()
         self.setWindowTitle(self.__app_name)
         self.setMinimumSize(QSize(screen_size.width() // 2, screen_size.height() // 2))
@@ -301,12 +151,13 @@ class MainWindow(QMainWindow):
         self.__create_system_tray()
         self.__create_menubar()
         self.__create_central_widget()
+        self.__connect_devices()
         if self.__start_minimized:
             QTimer.singleShot(0, self.hide)
         else:
             self.show()
 
-    def __create_icon(self, name: str, dark: bool=True) -> QIcon:
+    def __create_icon(self, name: str) -> QIcon:
         """Create themed QIcon."""
         if not name:
             return QIcon()
@@ -316,11 +167,12 @@ class MainWindow(QMainWindow):
         painter: QPainter = QPainter()
         if painter.begin(pixmap):
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
-            painter.fillRect(pixmap.rect(), QColor("white" if dark else "black"))
+            painter.fillRect(pixmap.rect(), QColor("white" if "dark" in self.__theme  else "black"))
             painter.end()
         return QIcon(pixmap)
 
-    def __force_refresh(self, widget: QWidget) -> None:
+    @staticmethod
+    def __force_refresh(widget: QWidget) -> None:
         """Force refresh widget style."""
         widget.style().unpolish(widget)
         widget.style().polish(widget)
@@ -444,7 +296,7 @@ class MainWindow(QMainWindow):
         self.__load_configuration(settings.get("devices", {}))
         self.__start_minimized = settings.get("start_minimized", False)
         self.__minimize_on_exit = settings.get("minimize_on_exit", False)
-        self.__dark_theme = settings.get("dark_theme", False)
+        self.__theme = settings.get("theme", "dark")
         if server_config := settings.get("server", {}):
             self.__server_config.ip = server_config.get("ip", "")
             self.__server_config.port = server_config.get("port", -1)
@@ -469,7 +321,7 @@ class MainWindow(QMainWindow):
             }
             configuration["start_minimized"] = self.__start_minimized
             configuration["minimize_on_exit"] = self.__minimize_on_exit
-            configuration["dark_theme"] = self.__dark_theme
+            configuration["theme"] = self.__theme
             with open(self.__settings, "w") as f:
                 json.dump(configuration, f, indent=4)
             QApplication.quit()
@@ -773,6 +625,15 @@ class MainWindow(QMainWindow):
             devices.append(device)
         return devices
 
+    def __connect_devices(self) -> bool:
+        """Connect all devices."""
+        try:
+            for device in self.__devices:
+                device.initialize()
+            return True
+        except Exception:
+            return False
+
     def closeEvent(self, event: QCloseEvent):
         """Override the close event to handle application minimize to system tray."""
         event.ignore()
@@ -800,22 +661,13 @@ class MainWindow(QMainWindow):
             )
         super().changeEvent(event)
 
-    def connect_devices(self) -> bool:
-        """Connect all devices."""
-        try:
-            for device in self.__devices:
-                device.initialize()
-            return True
-        except Exception:
-            return False
 
 def main() -> int:
     """Start point."""
     app_name: str = "Finally NZXT Fan control"
-    app: Application = Application()
-    app.setApplicationName(app_name)
-    window: MainWindow = MainWindow(app_name=app_name)
-    window.connect_devices()
+    app: Application = Application(app_name=app_name)
+    theme_manager: ThemeManager = ThemeManager(app)
+    MainWindow(app_name=app_name, theme_manager=theme_manager)
     app.exec()
     return 0
 
