@@ -48,6 +48,42 @@ python fan_control_gui.py
 
 ---
 
+## 🌡️ Temperature Sensor Integration (LibreHardwareMonitor)
+
+This app uses [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) as a backend source for temperature sensors. Specifically, it relies on its **HTTP server feature** to fetch real-time data from your CPU, GPU, and other components.
+
+### 🔧 Setup Instructions
+
+1. **Download LibreHardwareMonitor**
+    - Visit the [releases page](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases)
+    - Download the latest `.zip` or `.exe` version
+
+2. **Enable the HTTP Server**
+    - Launch `LibreHardwareMonitor.exe`
+    - Go to `Options` → `Remote Web Server`
+    - Enable the server and set the port (default is `8085`)
+    - Ensure the app is running in the background while using NZXT FAN Control App
+
+3. **Verify Sensor Access**
+    - Open your browser and visit:  
+      `http://localhost:8085/data.json`  
+      You should see a JSON dump of your system’s sensor data
+
+4. **Start NZXT FAN Control App**
+    - Go to `Settings` -> `Source configuration`
+    - Set `IP` and `PORT` of **LibreHardwareMonitor's server**
+    - Click on `Save`
+
+After that the app will automatically query the JSON endpoint to retrieve temperature values
+
+### 🧪 Notes
+
+- You can change the port if needed, but make sure it matches in your control app
+- LibreHardwareMonitor must remain open for live sensor updates
+- No admin privileges required unless accessing restricted sensors
+
+---
+
 ## 🧩 Architecture
 
 - fan_control_gui.py: Main GUI logic and hardware interface
