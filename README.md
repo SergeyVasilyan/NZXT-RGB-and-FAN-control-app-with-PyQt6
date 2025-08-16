@@ -1,5 +1,12 @@
 # 🌀 NZXT FAN Control App (PyQt6)
 
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
+![PyQt6](https://img.shields.io/badge/PyQt6-GUI-green?logo=qt&logoColor=white)
+![License](https://img.shields.io/badge/License-GPLv3-blue?logo=gnu&logoColor=white)
+![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey?logo=windows&logoColor=white)
+![Status](https://img.shields.io/badge/Status-Active-brightgreen)
+![Open Source](https://img.shields.io/badge/Open%20Source-Friendly-blueviolet?logo=github&logoColor=white)
+
 I got fed up with being forced to use NZXT CAM or pay 5$ to SingalRGB so I created my own app and decided to share it with the community. Enjoy it.
 
 A free, open-source alternative to NZXT CAM and SignalRGB—built with PyQt6 to give you full control over your NZXT fans, without paywalls or proprietary lock-in.
