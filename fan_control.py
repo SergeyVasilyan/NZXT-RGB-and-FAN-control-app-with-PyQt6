@@ -29,7 +29,9 @@ from PyQt6.QtGui import (
     QFont,
     QGuiApplication,
     QIcon,
+    QPainter,
     QPalette,
+    QPixmap,
     QRegularExpressionValidator,
     QWindowStateChangeEvent,
 )
@@ -61,6 +63,16 @@ class Application(QApplication):
     def __init__(self) -> None:
         """INIT."""
         super().__init__([])
+        self.__styles: str = "styles.qss"
+        self.__load_stylesheet()
+
+    def __load_stylesheet(self) -> None:
+        """Load styles qss."""
+        try:
+            with open(self.__styles, "r") as f:
+                self.setStyleSheet(f.read())
+        except Exception as _:
+            return
 
 class ObservableDict(QObject):
     """Custom Dict with onChange signal."""
@@ -260,18 +272,19 @@ class MainWindow(QMainWindow):
         """INIT."""
         super().__init__()
         self.__app_name: str = app_name
-        self.__icons: str = "icons"
         self.__settings: str = "settings.json"
         self.__modes: ObservableDict = ObservableDict()
         self.__sources: ObservableDict = ObservableDict()
         self.__server_config: ServerConfiguration = ServerConfiguration()
+        self.__dark_theme: bool = True
         self.__start_minimized: bool = False
         self.__minimize_on_exit: bool = False
         self.__load_settings()
         screen_size: QRect = QGuiApplication.primaryScreen().availableGeometry()
         self.setWindowTitle(self.__app_name)
         self.setMinimumSize(QSize(screen_size.width() // 2, screen_size.height() // 2))
-        self.setWindowIcon(QIcon(f"{self.__icons}/icon.png"))
+        self.__icons: str = "icons"
+        self.setWindowIcon(self.__create_icon("icon"))
         self.__devices: list[Any] = self.__init_devices()
         self.__min_temp: int = 30
         self.__temps: ObservableDict = ObservableDict({
@@ -293,15 +306,51 @@ class MainWindow(QMainWindow):
         else:
             self.show()
 
+    def __create_icon(self, name: str, dark: bool=True) -> QIcon:
+        """Create themed QIcon."""
+        if not name:
+            return QIcon()
+        pixmap: QPixmap = QPixmap(f"{self.__icons}/{name}.png")
+        if pixmap.isNull():
+            return QIcon()
+        painter: QPainter = QPainter()
+        if painter.begin(pixmap):
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+            painter.fillRect(pixmap.rect(), QColor("white" if dark else "black"))
+            painter.end()
+        return QIcon(pixmap)
+
+    def __force_refresh(self, widget: QWidget) -> None:
+        """Force refresh widget style."""
+        widget.style().unpolish(widget)
+        widget.style().polish(widget)
+        widget.update()
+
+    def __create_label(self, text: str, size: str="", target: str="") -> QLabel:
+        """Create QLabel with dynamic QSS."""
+        size_map: dict[str, int] = {
+            "small": 2,
+            "medium": 4,
+            "large": 6 ,
+        }
+        label: QLabel = QLabel(text)
+        font: QFont = label.font()
+        font.setPointSize((size_map.get(size, size_map["small"]) * self.height()) // 100)
+        label.setFont(font)
+        if target:
+            label.setProperty("for", target)
+        self.__force_refresh(label)
+        return label
+
     def __create_system_tray(self) -> None:
         """Create and setup system tray icon."""
-        self.__tray_icon = QSystemTrayIcon(QIcon(f"{self.__icons}/icon.png"), self)
+        self.__tray_icon = QSystemTrayIcon(self.__create_icon("icon"), self)
         self.__tray_icon.setToolTip(self.__app_name)
         self.__tray_icon.activated.connect(self.__on_tray_activated)
         tray_menu: QMenu = QMenu()
         self.__tray_icon.setContextMenu(tray_menu)
-        restore_action: QAction = QAction(QIcon(f"{self.__icons}/restore.png"), "Restore", self)
-        quit_action: QAction = QAction(QIcon(f"{self.__icons}/exit.png"), "Quit", self)
+        restore_action: QAction = QAction(self.__create_icon("restore"), "Restore", self)
+        quit_action: QAction = QAction(self.__create_icon("quit"), "Quit", self)
         restore_action.triggered.connect(self.__restore_window)
         quit_action.triggered.connect(self.__close)
         tray_menu.addAction(restore_action)
@@ -310,10 +359,10 @@ class MainWindow(QMainWindow):
 
     def __create_file_menu(self, menu_bar: QMenuBar) -> None:
         """Create file menu section."""
-        file_menu: QMenu = menu_bar.addMenu(QIcon(f"{self.__icons}/file.png"), "&File")
+        file_menu: QMenu = menu_bar.addMenu(self.__create_icon("file"), "&File")
         for action, trigger in [("export", self.__on_export_triggered),
                                 ("import", self.__on_import_triggered)]:
-            qaction: QAction = QAction(QIcon(f"{self.__icons}/{action}.png"),
+            qaction: QAction = QAction(self.__create_icon(action),
                                              f"&{action.title()}",
                                              file_menu)
             qaction.triggered.connect(trigger)
@@ -324,22 +373,22 @@ class MainWindow(QMainWindow):
         def update_start_minimized() -> None:
             """Update start minimized setting."""
             self.__start_minimized = not self.__start_minimized
-            start_icon = QIcon(f"{self.__icons}/check.png" if self.__start_minimized else "")
+            start_icon = self.__create_icon("check" if self.__start_minimized else "")
             start_minimized.setIcon(start_icon)
 
         def update_minimize_on_exit() -> None:
             """Update minimize on exit setting."""
             self.__minimize_on_exit = not self.__minimize_on_exit
-            minimize_icon = QIcon(f"{self.__icons}/check.png" if self.__minimize_on_exit else "")
+            minimize_icon = self.__create_icon("check" if self.__minimize_on_exit else "")
             minimize_on_exit.setIcon(minimize_icon)
 
-        settings_menu: QMenu = menu_bar.addMenu(QIcon(f"{self.__icons}/settings.png"), "&Settings")
-        network_action: QAction = QAction(QIcon(f"{self.__icons}/network.png"),
+        settings_menu: QMenu = menu_bar.addMenu(self.__create_icon("settings"), "&Settings")
+        network_action: QAction = QAction(self.__create_icon("network"),
                                          "&Source configuration",
                                          settings_menu)
-        start_icon: QIcon = QIcon(f"{self.__icons}/check.png" if self.__start_minimized else "")
+        start_icon: QIcon = self.__create_icon("check" if self.__start_minimized else "")
         start_minimized: QAction = QAction(start_icon, "Start minimized", settings_menu)
-        minimize_icon: QIcon = QIcon(f"{self.__icons}/check.png" if self.__minimize_on_exit else "")
+        minimize_icon: QIcon = self.__create_icon("check" if self.__minimize_on_exit else "")
         minimize_on_exit: QAction = QAction(minimize_icon, "Minimized on exit", settings_menu)
         network_action.triggered.connect(self.__on_network_triggered)
         start_minimized.triggered.connect(update_start_minimized)
@@ -395,6 +444,7 @@ class MainWindow(QMainWindow):
         self.__load_configuration(settings.get("devices", {}))
         self.__start_minimized = settings.get("start_minimized", False)
         self.__minimize_on_exit = settings.get("minimize_on_exit", False)
+        self.__dark_theme = settings.get("dark_theme", False)
         if server_config := settings.get("server", {}):
             self.__server_config.ip = server_config.get("ip", "")
             self.__server_config.port = server_config.get("port", -1)
@@ -419,6 +469,7 @@ class MainWindow(QMainWindow):
             }
             configuration["start_minimized"] = self.__start_minimized
             configuration["minimize_on_exit"] = self.__minimize_on_exit
+            configuration["dark_theme"] = self.__dark_theme
             with open(self.__settings, "w") as f:
                 json.dump(configuration, f, indent=4)
             QApplication.quit()
@@ -486,8 +537,7 @@ class MainWindow(QMainWindow):
         label.setText(f"{new_temp} C")
         label.setStyleSheet(f"color: hsl({100 - new_temp}, 100%, 50%);")
 
-    @staticmethod
-    def __update_slider_style(slider: QSlider, value: int) -> None:
+    def __update_slider_style(self, slider: QSlider, value: int) -> None:
         """Update given QSlider style."""
         is_enabled: bool = slider.isEnabled()
         cursor: Qt.CursorShape = Qt.CursorShape.ClosedHandCursor
@@ -496,12 +546,6 @@ class MainWindow(QMainWindow):
         slider.setCursor(cursor)
         lightness: int = 50 if is_enabled else 30
         slider.setStyleSheet(f"""
-            QSlider::groove:vertical {{
-                background: hsl(0, 0%, 0%);
-                border-radius: 5px;
-                width: 10px;
-                margin: 0px;
-            }}
             QSlider::handle:vertical {{
                 background: hsl(200, 100%, {lightness}%);
                 border: none;
@@ -510,11 +554,8 @@ class MainWindow(QMainWindow):
                 height: 20px;
                 width: 20px;
             }}
-            QSlider::sub-page:vertical {{
-                background: hsl(0, 0%, 0%);
-            }}
             QSlider::add-page:vertical {{
-                background: hsl({100 - value}, 100%, {lightness}%);
+                background-color: hsl({100 - value}, 100%, {lightness}%);
             }}
         """)
 
@@ -590,22 +631,12 @@ class MainWindow(QMainWindow):
         separator.setLineWidth(1)
         return separator
 
-    def __create_label(self, text: str, ratio: int, bold: bool=False) -> QLabel:
-        """Create QLabel with custom font and size."""
-        label: QLabel = QLabel(text)
-        font_size: int = max(10, (self.width() * ratio) // 100)
-        font: QFont = QFont("Arial", font_size)
-        font.setBold(bold)
-        label.setFont(font)
-        return label
-
     def __create_temp_layout(self, source: str) -> QVBoxLayout:
         """Create Temp layout."""
         temp_layout: QVBoxLayout = QVBoxLayout()
-        source_label: QLabel = self.__create_label(source, 3, bold=True)
-        source_label.setStyleSheet("color: hsl(196, 100%, 50%);")
+        source_label: QLabel = self.__create_label(source, size="large", target="source")
         temp_layout.addWidget(source_label, alignment=Qt.AlignmentFlag.AlignHCenter)
-        temp_label: QLabel = self.__create_label(f"{self.__temps[source]} C", 2)
+        temp_label: QLabel = self.__create_label(f"{self.__temps[source]} C", size="medium")
         self.__temps.value_changed.connect(lambda new_temps: self.__update_temp_label(temp_label,
                                                                                       new_temps,
                                                                                       source))
@@ -652,7 +683,7 @@ class MainWindow(QMainWindow):
 
         fan_settings: QVBoxLayout = QVBoxLayout()
         source_layout: QHBoxLayout = QHBoxLayout()
-        source_layout.addWidget(QLabel("Source"))
+        source_layout.addWidget(self.__create_label("Source"))
         source_box: QComboBox = QComboBox()
         source_box.addItems([*self.__temps.get_data().keys()])
         source_box.currentTextChanged.connect(lambda source: self.__update_fan_source(device_id,
@@ -665,7 +696,7 @@ class MainWindow(QMainWindow):
         source_layout.addWidget(source_box)
         self.__update_fan_source(device_id, channel, current_text)
         mode_layout: QHBoxLayout = QHBoxLayout()
-        mode_layout.addWidget(QLabel("Mode"))
+        mode_layout.addWidget(self.__create_label("Mode"))
         mode_box: QComboBox = QComboBox()
         mode_box.addItems(["Normal", "Aggressive", "Silent", "Custom"])
         mode_box.currentTextChanged.connect(lambda mode: self.__update_fan_mode(device_id,
@@ -686,8 +717,7 @@ class MainWindow(QMainWindow):
         """Create fan layout."""
 
         fan_layout: QVBoxLayout = QVBoxLayout()
-        channel_label: QLabel = self.__create_label(channel, 1)
-        channel_label.setStyleSheet("color: hsl(200, 100%, 50%);")
+        channel_label: QLabel = self.__create_label(channel, target="channel")
         fan_layout.addWidget(channel_label, alignment=Qt.AlignmentFlag.AlignHCenter)
         fan_slider: QSlider = self.__create_fan_slider(device_id, channel)
         fan_layout.addWidget(fan_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
@@ -697,8 +727,7 @@ class MainWindow(QMainWindow):
     def __create_device_layout(self, device: Any, device_id: str) -> QVBoxLayout:
         """Create Device Layout."""
         device_layout: QVBoxLayout = QVBoxLayout()
-        name_label: QLabel = self.__create_label(device.description, 1, bold=True)
-        name_label.setStyleSheet("color: hsl(284, 100%, 50%);")
+        name_label: QLabel = self.__create_label(device.description, target="device")
         device_layout.addWidget(name_label, alignment=Qt.AlignmentFlag.AlignCenter)
         fans_layout: QHBoxLayout = QHBoxLayout()
         channels: list[str] = list(device._speed_channels.keys())
@@ -730,11 +759,8 @@ class MainWindow(QMainWindow):
         """Create central widget."""
         central_widget: QWidget = QWidget()
         central_widget.setAutoFillBackground(True)
-        palette: QPalette = central_widget.palette()
-        background_color: QColor = QColor()
-        background_color.setHsl(0, 0, 50)
-        palette.setColor(central_widget.backgroundRole(), background_color)
-        central_widget.setPalette(palette)
+        central_widget.setProperty("id", "central")
+        self.__force_refresh(central_widget)
         self.__configure_layouts(central_widget)
         self.setCentralWidget(central_widget)
 
