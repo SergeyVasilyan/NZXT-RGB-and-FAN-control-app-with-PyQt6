@@ -8,6 +8,7 @@ import json
 import time
 
 from datetime import datetime
+from dataclasses import dataclass
 from typing import Any
 from liquidctl import find_liquidctl_devices
 from PyQt6.QtGui import (
@@ -36,6 +37,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
     QDialog,
+    QDoubleSpinBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -106,55 +108,48 @@ class ImportSignal(QObject):
         """Trigger signal."""
         self.imported.emit()
 
+@dataclass
 class ServerConfiguration:
     """Server Configuration."""
+    
+    ip: str = "192.168.10.17"
+    port: int = 8085
+    rate: float = 1.0
 
-    def __init__(self, ip: str="192.168.10.17", port: int=8085) -> None:
-        """INIT."""
-        super().__init__()
-        self.__ip: str = ip
-        self.__port: int = port
-
-    def get(self) -> tuple[str, int]:
-        """Trigger signal."""
-        return self.__ip, self.__port
-
-    def set(self, ip: str, port: int) -> None:
-        """Trigger signal."""
-        if ip:
-            self.__ip = ip
-        if -1 != port:
-            self.__port = port
-
-class IPPortDialog(QDialog):
-    """Simple IP and PORT selection Dialog."""
+class SettingsDialog(QDialog):
+    """Simple Settings selection Dialog."""
 
     def __init__(self, config: ServerConfiguration) -> None:
         """INIT."""
         super().__init__()
-        self.setWindowTitle("IP and Port Input")
+        self.setWindowTitle("Settings")
         self.setFixedSize(300, 150)
         self.__ip_input: QLineEdit
         self.__port_input: QLineEdit
+        self.__rate_spin_box: QDoubleSpinBox
         self.__config: ServerConfiguration = config
         self.__create_layout()
 
     def __validate_inputs(self) -> None:
         """Validate IP and PORT."""
-        ip: str = self.__ip_input.text()
-        port_text: str = self.__port_input.text()
+        ip_text: str = self.__ip_input.text()
+        port_text: int = int(self.__port_input.text())
         if not self.__ip_input.hasAcceptableInput():
             QMessageBox.warning(self, "Invalid IP", "Please enter a valid IPv4 address.")
             return
         try:
-            port: int = int(port_text)
+            port: int = port_text
             if not (1 <= port <= 65535):
                 raise ValueError
         except ValueError:
-            QMessageBox.warning(self, "Invalid Port", "Port must be an integer between 1 and 65535.")
+            QMessageBox.warning(self, "Invalid Port",
+                                "Port must be an integer between 1 and 65535.")
             return
-        self.__config.set(ip, port)
-        QMessageBox.information(self, "Success", f"IP: {ip}\nPort: {port}")
+        rate: float = round(self.__rate_spin_box.value(), 2)
+        self.__config.ip = ip_text
+        self.__config.port = port_text
+        self.__config.rate = rate
+        QMessageBox.information(self, "Success", f"IP: {ip_text}\nPort: {port_text}\nRate: {rate}")
         self.close()
 
     def __create_ip_section(self) -> QHBoxLayout:
@@ -162,7 +157,7 @@ class IPPortDialog(QDialog):
         ip_layout: QHBoxLayout = QHBoxLayout()
         ip_layout.addWidget(QLabel("IP Address:"))
         self.__ip_input = QLineEdit()
-        self.__ip_input.setText(self.__config.get()[0])
+        self.__ip_input.setText(self.__config.ip)
         self.__ip_input.setPlaceholderText("Enter IP address")
         ip_regex: QRegularExpression = QRegularExpression(
             r"^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)"
@@ -177,16 +172,33 @@ class IPPortDialog(QDialog):
         port_layout: QHBoxLayout = QHBoxLayout()
         port_layout.addWidget(QLabel("Port:"))
         self.__port_input = QLineEdit()
-        self.__port_input.setText(str(self.__config.get()[1]))
+        self.__port_input.setText(str(self.__config.port))
         self.__port_input.setPlaceholderText("Enter Port (1–65535)")
+        self.__port_input.setPlaceholderText("Enter IP address")
+        port_regex: QRegularExpression = QRegularExpression(
+            r"^(6553[0-5]|655[0-2]\d|65[0-4]\d{2}|6[0-4]\d{3}|[1-5]\d{4}|\d{1,4})$"
+        )
+        self.__port_input.setValidator(QRegularExpressionValidator(port_regex))
         port_layout.addWidget(self.__port_input)
         return port_layout
+
+    def __create_rate_section(self) -> QHBoxLayout:
+        """Create Rate section."""
+        rate_layout: QHBoxLayout = QHBoxLayout()
+        rate_layout.addWidget(QLabel("Rate (in seconds):"))
+        self.__rate_spin_box = QDoubleSpinBox()
+        self.__rate_spin_box.setRange(0.1, 10.0)
+        self.__rate_spin_box.setSingleStep(0.1)
+        self.__rate_spin_box.setValue(self.__config.rate)
+        rate_layout.addWidget(self.__rate_spin_box)
+        return rate_layout
 
     def __create_layout(self) -> None:
         """Create Dialog layout."""
         layout: QVBoxLayout = QVBoxLayout()
         layout.addLayout(self.__create_ip_section())
         layout.addLayout(self.__create_port_section())
+        layout.addLayout(self.__create_rate_section())
         submit_btn: QPushButton = QPushButton("Save")
         submit_btn.clicked.connect(self.__validate_inputs)
         layout.addWidget(submit_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
@@ -195,10 +207,9 @@ class IPPortDialog(QDialog):
 class Worker(QThread):
     temps: pyqtSignal = pyqtSignal(float, float)
 
-    def __init__(self, config: ServerConfiguration, interval: float=1.0, min_temp: float=30.) -> None:
+    def __init__(self, config: ServerConfiguration, min_temp: float=30.) -> None:
         """INIT."""
         super().__init__()
-        self.__interval: float = interval
         self.__min_temp: float = min_temp
         self.__config: ServerConfiguration = config
 
@@ -207,10 +218,9 @@ class Worker(QThread):
         cpu_temp: float = self.__min_temp
         gpu_temp: float = self.__min_temp
         response: requests.Response|None = None
-        ip, port = self.__config.get()
         for _ in range(0, 3):
             try:
-                response = requests.get(f"http://{ip}:{port}/data.json")
+                response = requests.get(f"http://{self.__config.ip}:{self.__config.port}/data.json")
             except requests.exceptions.ConnectionError:
                 time.sleep(1)
         if response and response.ok:
@@ -240,7 +250,7 @@ class Worker(QThread):
         """Get CPU Core Average and GPU temperature from LibreHardwareMonitor server."""
         while True:
             self.temps.emit(*self.__get_temp())
-            time.sleep(self.__interval)
+            time.sleep(self.__config.rate)
 
 class MainWindow(QMainWindow):
     """Main Window."""
@@ -269,7 +279,7 @@ class MainWindow(QMainWindow):
             "AVG": self.__min_temp,
             "MAX": self.__min_temp,
         })
-        self.__worker: Worker = Worker(self.__server_config, interval=1.0, min_temp=self.__min_temp)
+        self.__worker: Worker = Worker(self.__server_config, min_temp=self.__min_temp)
         self.__worker.temps.connect(self.__update_temps)
         self.__worker.start()
         self.__update_signal: ImportSignal = ImportSignal()
@@ -384,7 +394,9 @@ class MainWindow(QMainWindow):
         self.__start_minimized = settings.get("start_minimized", False)
         self.__minimize_on_exit = settings.get("minimize_on_exit", False)
         if server_config := settings.get("server", {}):
-            self.__server_config.set(server_config.get("ip", ""), server_config.get("port", -1))
+            self.__server_config.ip = server_config.get("ip", "")
+            self.__server_config.port = server_config.get("port", -1)
+            self.__server_config.rate = server_config.get("rate", 1)
 
     def __close(self) -> None:
         """Close app normally."""
@@ -398,10 +410,10 @@ class MainWindow(QMainWindow):
             for device in self.__devices:
                 device.disconnect()
             configuration: dict[str, Any] = self.__export_current_configuration()
-            ip, port = self.__server_config.get()
             configuration["server"] = {
-                "ip": ip,
-                "port": port,
+                "ip": self.__server_config.ip,
+                "port": self.__server_config.port,
+                "rate": self.__server_config.rate,
             }
             configuration["start_minimized"] = self.__start_minimized
             configuration["minimize_on_exit"] = self.__minimize_on_exit
@@ -455,7 +467,7 @@ class MainWindow(QMainWindow):
 
     def __on_network_triggered(self, _event: QEvent) -> None:
         """On Source Configuration triggered."""
-        dialog: IPPortDialog = IPPortDialog(self.__server_config)
+        dialog: SettingsDialog = SettingsDialog(self.__server_config)
         dialog.exec()
 
     def __update_temps(self, cpu: float, gpu: float) -> None:
@@ -627,16 +639,16 @@ class MainWindow(QMainWindow):
         self.__update_slider_style(fan_slider, 30)
         return fan_slider
 
-    def __create_fan_title(self, device_id: str, channel: str) -> QHBoxLayout:
-        """Create Fan title with combobox."""
+    def __create_fan_settings(self, device_id: str, channel: str) -> QVBoxLayout:
+        """Create fan settings layout."""
         def update_value_on_import() -> None:
             """Update mode on Import."""
+            mode_box.setCurrentText(self.__modes[device_id][channel])
             source_box.setCurrentText(self.__sources[device_id][channel])
 
-        fan_header_layout: QHBoxLayout = QHBoxLayout()
-        channel_label: QLabel = self.__create_label(channel, 1)
-        channel_label.setStyleSheet("color: hsl(200, 100%, 50%);")
-        fan_header_layout.addWidget(channel_label)
+        fan_settings: QVBoxLayout = QVBoxLayout()
+        source_layout: QHBoxLayout = QHBoxLayout()
+        source_layout.addWidget(QLabel("Source"))
         source_box: QComboBox = QComboBox()
         source_box.addItems([*self.__temps.get_data().keys()])
         source_box.currentTextChanged.connect(lambda source: self.__update_fan_source(device_id,
@@ -646,21 +658,11 @@ class MainWindow(QMainWindow):
         if device_id in self.__sources:
             current_text = self.__sources[device_id][channel]
             source_box.setCurrentText(current_text)
+        source_layout.addWidget(source_box)
         self.__update_fan_source(device_id, channel, current_text)
-        self.__update_signal.imported.connect(update_value_on_import)
-        fan_header_layout.addWidget(source_box)
-        return fan_header_layout
-
-    def __create_fan_layout(self, device_id: str, channel: str) -> QVBoxLayout:
-        """Create fan layout."""
-        def update_value_on_import() -> None:
-            """Update mode on Import."""
-            mode_box.setCurrentText(self.__modes[device_id][channel])
-
-        fan_layout: QVBoxLayout = QVBoxLayout()
-        fan_layout.addLayout(self.__create_fan_title(device_id, channel))
-        fan_slider: QSlider = self.__create_fan_slider(device_id, channel)
-        fan_layout.addWidget(fan_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
+        
+        mode_layout: QHBoxLayout = QHBoxLayout()
+        mode_layout.addWidget(QLabel("Mode"))
         mode_box: QComboBox = QComboBox()
         mode_box.addItems(["Normal", "Aggressive", "Silent", "Custom"])
         mode_box.currentTextChanged.connect(lambda mode: self.__update_fan_mode(device_id,
@@ -672,7 +674,21 @@ class MainWindow(QMainWindow):
             mode_box.setCurrentText(current_text)
         self.__update_fan_mode(device_id, channel, current_text)
         self.__update_signal.imported.connect(update_value_on_import)
-        fan_layout.addWidget(mode_box, alignment=Qt.AlignmentFlag.AlignHCenter)
+        mode_layout.addWidget(mode_box)
+        fan_settings.addLayout(source_layout)
+        fan_settings.addLayout(mode_layout)
+        return fan_settings
+
+    def __create_fan_layout(self, device_id: str, channel: str) -> QVBoxLayout:
+        """Create fan layout."""
+
+        fan_layout: QVBoxLayout = QVBoxLayout()
+        channel_label: QLabel = self.__create_label(channel, 1)
+        channel_label.setStyleSheet("color: hsl(200, 100%, 50%);")
+        fan_layout.addWidget(channel_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+        fan_slider: QSlider = self.__create_fan_slider(device_id, channel)
+        fan_layout.addWidget(fan_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
+        fan_layout.addLayout(self.__create_fan_settings(device_id, channel))
         return fan_layout
 
     def __create_device_layout(self, device: Any, device_id: str) -> QVBoxLayout:
