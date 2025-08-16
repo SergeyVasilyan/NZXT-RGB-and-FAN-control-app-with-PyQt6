@@ -43,7 +43,7 @@ A free, open-source alternative to NZXT CAM and SignalRGB—built with PyQt6 to 
 git clone https://github.com/SergeyVasilyan/NZXT-RGB-and-FAN-control-app-with-PyQt6.git
 cd NZXT-RGB-and-FAN-control-app-with-PyQt6
 pip install -r requirements.txt
-python fan_control_gui.py
+python fan_control.py
 ```
 
 ---
@@ -65,8 +65,8 @@ This app uses [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/Lib
     - Ensure the app is running in the background while using NZXT FAN Control App
 
 3. **Verify Sensor Access**
-    - Open your browser and visit:  
-      `http://localhost:8085/data.json`  
+    - Open your browser and visit:
+      `http://localhost:8085/data.json`
       You should see a JSON dump of your system’s sensor data
 
 4. **Start NZXT FAN Control App**
@@ -86,7 +86,7 @@ After that the app will automatically query the JSON endpoint to retrieve temper
 
 ## 🧩 Architecture
 
-- fan_control_gui.py: Main GUI logic and hardware interface
+- fan_control.py: Main GUI logic and hardware interface
 - icons/: UI assets (SVG/PNG)
 - LICENSE: GPL-3.0 license
 - CONTRIBUTING.md: Guidelines for contributing
