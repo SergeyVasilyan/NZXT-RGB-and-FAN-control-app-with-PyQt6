@@ -10,8 +10,28 @@ import time
 from datetime import datetime
 from typing import Any
 from liquidctl import find_liquidctl_devices
-from PyQt6.QtGui import QAction, QCloseEvent, QColor, QFont, QGuiApplication, QIcon, QPalette, QRegularExpressionValidator, QWindowStateChangeEvent
-from PyQt6.QtCore import QEvent, QObject, QRegularExpression, QTimer, Qt, QSize, QRect, QThread, pyqtSignal
+from PyQt6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QColor,
+    QFont,
+    QGuiApplication,
+    QIcon,
+    QPalette,
+    QRegularExpressionValidator,
+    QWindowStateChangeEvent
+)
+from PyQt6.QtCore import (
+    QEvent,
+    QObject,
+    QRegularExpression,
+    QTimer,
+    Qt,
+    QSize,
+    QRect,
+    QThread,
+    pyqtSignal
+)
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
