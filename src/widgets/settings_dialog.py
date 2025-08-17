@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
+
 @dataclass
 class ServerConfiguration:
     """Server Configuration."""

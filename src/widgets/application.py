@@ -2,6 +2,7 @@
 
 from PyQt6.QtWidgets import QApplication
 
+
 class Application(QApplication):
     """Main Application."""
 

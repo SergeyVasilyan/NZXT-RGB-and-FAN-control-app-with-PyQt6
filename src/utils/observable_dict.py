@@ -4,6 +4,7 @@ from typing import Any
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
+
 class ObservableDict(QObject):
     """Custom Dict with onChange signal."""
     value_changed: pyqtSignal = pyqtSignal(dict)

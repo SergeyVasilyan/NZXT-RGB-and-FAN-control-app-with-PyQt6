@@ -4,6 +4,7 @@ from typing import Any
 
 from PyQt6.QtCore import QSettings
 
+
 class AppConfig:
     """Singleton app settings."""
     _settings: QSettings = QSettings("self", "nzxt-fan-control")

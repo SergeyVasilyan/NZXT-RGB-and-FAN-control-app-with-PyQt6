@@ -2,9 +2,9 @@
 
 
 import src.utils.common as utils
-from src.utils.observable_dict import ObservableDict
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout
+from src.utils.observable_dict import ObservableDict
 
 
 class TemperatureSection(QHBoxLayout):
