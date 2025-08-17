@@ -1,19 +1,55 @@
 """Device section of the app."""
 
+import time
 from typing import Any
 
 import src.utils.common as utils
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QSlider, QVBoxLayout
 from src.utils.common import ImportSignal
 from src.utils.observable_dict import ObservableDict
+from src.widgets.settings_dialog import ServerConfiguration
 
+
+class Worker(QThread):
+    """Worker thread that poll fans rpm at given rate."""
+    rpms: pyqtSignal = pyqtSignal(dict)
+
+    def __init__(self, devices: list[Any], server_config: ServerConfiguration) -> None:
+        """INIT."""
+        super().__init__()
+        self.__devices: list[Any] = devices
+        self.__config: ServerConfiguration = server_config
+
+    def __get_rpms(self) -> dict[str, Any]:
+        """Get Fan RPM report form liquidctl."""
+        rpms: dict[str, Any] = {}
+        for index, device in enumerate(self.__devices):
+            device_id: str = str(index)
+            rpms[device_id] = {}
+            reports: list[tuple] = []
+            try:
+                reports = device.get_status()
+            except Exception as _: 
+                continue
+            for report in reports:
+                if "rpm" in report[-1]:
+                    name: str = "".join(report[0].split(" ")[:2]).lower()
+                    rpms[device_id][name] = report[1]
+        return rpms
+
+    def run(self):
+        """Run the worker."""
+        while True:
+            self.rpms.emit(self.__get_rpms())
+            time.sleep(self.__config.rate)
 
 class DeviceSection(QHBoxLayout):
     """Device section."""
 
     def __init__(self, devices: list[Any], modes: ObservableDict, sources: ObservableDict,
-                       temps: ObservableDict, update_signal: ImportSignal, min_temp: int) -> None:
+                       temps: ObservableDict, update_signal: ImportSignal, min_temp: int,
+                       server_config: ServerConfiguration) -> None:
         """INIT."""
         super().__init__()
         self.__devices: list[Any] = devices
@@ -21,11 +57,23 @@ class DeviceSection(QHBoxLayout):
         self.__sources: ObservableDict = sources
         self.__temps: ObservableDict = temps
         self.__update_signal: ImportSignal = update_signal
+        self.__rpms: ObservableDict = ObservableDict()
+        self.__worker: Worker = Worker(self.__devices, server_config)
+        self.__worker.rpms.connect(self.__update_rpms)
+        self.__worker.start()
         self.__min_temp: int = min_temp
         for device_id, device in enumerate(self.__devices):
             self.addLayout(self.__create_device_layout(device, str(device_id)))
             if device != self.__devices[-1]:
                 self.addWidget(utils.create_separator())
+
+    def __update_rpms(self, rpms: dict[str, Any]) -> None:
+        """Update RPM values."""
+        for device_id, info in rpms.items():
+            fans: dict[str, int] = {}
+            for channel, value in info.items():
+                fans[channel] = value
+            self.__rpms.update(device_id, fans)
 
     def __update_slider_style(self, slider: QSlider, value: int) -> None:
         """Update given QSlider style."""
@@ -58,7 +106,15 @@ class DeviceSection(QHBoxLayout):
             print(f"ERROR: Failed to set fan speed for {device_id=} {channel=}")
         self.__update_slider_style(fan_slider, value)
 
+    def __update_fan_rpm(self, device_id: str, channel: str, rpm_label: QLabel) -> None:
+        """Update fan rpm report."""
+        if device_id not in self.__rpms:
+            rpm_label.setText("N/A")
+            return
+        rpm_label.setText(f"RPM: {self.__rpms[device_id].get(channel, 'N/A')}")
+
     def __update_fan_mode(self, device_id: str, channel: str, mode: str) -> None:
+        """Update fan speed calculation mode."""
         modes: dict[str, Any] = self.__modes.get_data()
         if device_id not in modes:
             modes[device_id] = {}
@@ -66,6 +122,7 @@ class DeviceSection(QHBoxLayout):
         self.__modes[device_id] = modes[device_id]
 
     def __update_fan_source(self, device_id: str, channel: str, source: str) -> None:
+        """Update fan temperature source."""
         sources: dict[str, Any] = self.__sources.get_data()
         if device_id not in sources:
             sources[device_id] = {}
@@ -174,13 +231,19 @@ class DeviceSection(QHBoxLayout):
     def __create_fan_layout(self, device_id: str, channel: str) -> QVBoxLayout:
         """Create fan layout."""
         fan_layout: QVBoxLayout = QVBoxLayout()
+        header_layout: QHBoxLayout = QHBoxLayout()
         channel_label: QLabel = utils.create_label(channel, target="channel")
-        fan_layout.addWidget(channel_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+        rpm_label: QLabel = utils.create_label("RPM: N/A")
+        self.__rpms.value_changed.connect(lambda _: self.__update_fan_rpm(device_id, channel,
+                                                                          rpm_label))
+        header_layout.addWidget(channel_label, alignment=Qt.AlignmentFlag.AlignLeft)
+        header_layout.addWidget(rpm_label, alignment=Qt.AlignmentFlag.AlignRight)
         slider_layout: QHBoxLayout = QHBoxLayout()
         slider_layout.addLayout(utils.create_ruler())
         fan_slider: QSlider = self.__create_fan_slider(device_id, channel)
         slider_layout.addWidget(fan_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
         slider_layout.addLayout(utils.create_ruler(left=False))
+        fan_layout.addLayout(header_layout)
         fan_layout.addLayout(slider_layout)
         fan_layout.addLayout(self.__create_fan_settings(device_id, channel))
         return fan_layout

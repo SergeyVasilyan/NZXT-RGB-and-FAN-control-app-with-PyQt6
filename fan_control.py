@@ -271,7 +271,8 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(TemperatureSection(self.__temps, self.__names))
         main_layout.addWidget(utils.create_separator(horizontal=True))
         main_layout.addLayout(DeviceSection(self.__devices, self.__modes, self.__sources,
-                                            self.__temps, self.__update_signal, self.__min_temp))
+                                            self.__temps, self.__update_signal, self.__min_temp,
+                                            self.__server_config))
 
     def __create_central_widget(self) -> None:
         """Create central widget."""
