@@ -110,7 +110,7 @@ class MainWindow(QMainWindow):
     def __init__(self, app_name: str="", theme_manager: ThemeManager|None=None) -> None:
         """INIT."""
         super().__init__()
-        self.__icons: str = "icons"
+        self.__icons: str = "src/icons"
         self.__app_name: str = app_name
         self.__settings: str = "settings.json"
         AppConfig.set("theme", "dark")

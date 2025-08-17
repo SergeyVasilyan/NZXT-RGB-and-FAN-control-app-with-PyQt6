@@ -8,7 +8,7 @@ class ThemeManager:
 
     def __init__(self, app: QApplication):
         self.__app: QApplication = app
-        self.__path: str = "styles"
+        self.__path: str = "src/styles"
 
     def __load_stylesheet(self, name: str) -> str:
         """Load corresponding QSS."""
