@@ -10,10 +10,10 @@ from datetime import datetime
 from typing import Any
 
 import requests
+import src.utils.common as utils
 from liquidctl import find_liquidctl_devices
 from PyQt6.QtCore import (
     QEvent,
-    QObject,
     QRect,
     QSize,
     Qt,
@@ -24,49 +24,32 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import (
     QAction,
     QCloseEvent,
-    QColor,
-    QFont,
     QGuiApplication,
     QIcon,
-    QPainter,
-    QPixmap,
     QWindowStateChangeEvent,
 )
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
-    QFileDialog,
-    QFrame,
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QMenu,
-    QMenuBar,
     QMessageBox,
-    QSizePolicy,
     QSlider,
-    QSpacerItem,
     QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
 )
-from src.application import Application
-from src.observable_dict import ObservableDict
-from src.settings_dialog import ServerConfiguration, SettingsDialog
-from src.theme_manager import ThemeManager
+from src.layouts.temp import TemperatureSection
+from src.utils.common import ImportSignal
+from src.utils.observable_dict import ObservableDict
+from src.widgets.application import Application
+from src.widgets.config import AppConfig
+from src.widgets.menubar import MenuBar
+from src.widgets.settings_dialog import ServerConfiguration
+from src.widgets.theme_manager import ThemeManager
 
-
-class ImportSignal(QObject):
-    """Simple import update signal."""
-    imported: pyqtSignal = pyqtSignal()
-
-    def __init__(self) -> None:
-        """INIT."""
-        super().__init__()
-
-    def update(self) -> None:
-        """Trigger signal."""
-        self.imported.emit()
 
 class Worker(QThread):
     """Worker thread that poll sensors temperature from the server at given rate."""
@@ -130,22 +113,22 @@ class MainWindow(QMainWindow):
     def __init__(self, app_name: str="", theme_manager: ThemeManager|None=None) -> None:
         """INIT."""
         super().__init__()
+        self.__icons: str = "icons"
         self.__app_name: str = app_name
-        self.__theme_manager: ThemeManager = theme_manager
         self.__settings: str = "settings.json"
-        self.__theme: str = "dark"
+        AppConfig.set("theme", "dark")
+        AppConfig.set("start_minimized", False)
+        AppConfig.set("minimize_on_exit", False)
+        self.__theme_manager: ThemeManager = theme_manager
         self.__modes: ObservableDict = ObservableDict()
         self.__sources: ObservableDict = ObservableDict()
         self.__server_config: ServerConfiguration = ServerConfiguration()
-        self.__start_minimized: bool = False
-        self.__minimize_on_exit: bool = False
-        self.__load_settings()
-        self.__theme_manager.apply_theme(self.__theme)
         screen_size: QRect = QGuiApplication.primaryScreen().availableGeometry()
         self.setWindowTitle(self.__app_name)
         self.setMinimumSize(QSize(screen_size.width() // 2, screen_size.height() // 2))
-        self.__icons: str = "icons"
         self.setWindowIcon(self.__create_icon("icon"))
+        self.__load_settings()
+        self.__theme_manager.apply_theme(AppConfig.get("theme"))
         self.__devices: list[Any] = self.__init_devices()
         self.__min_temp: int = 30
         self.__temps: ObservableDict = ObservableDict({
@@ -165,58 +148,19 @@ class MainWindow(QMainWindow):
         self.__update_signal: ImportSignal = ImportSignal()
         self.__tray_icon: QSystemTrayIcon
         self.__create_system_tray()
-        self.__create_menubar()
+        self.setMenuBar(MenuBar(self.__icons, self.__server_config, self.__update_signal,
+                                self.__export_current_configuration, self.__load_configuration,
+                                self.__tray_icon))
         self.__create_central_widget()
         self.__connect_devices()
-        if self.__start_minimized:
+        if AppConfig.get("start_minimized"):
             QTimer.singleShot(0, self.hide)
         else:
             self.show()
 
-    @staticmethod
-    def __force_refresh(widget: QWidget) -> None:
-        """Force refresh widget style."""
-        widget.style().unpolish(widget)
-        widget.style().polish(widget)
-        widget.update()
-
     def __create_icon(self, name: str) -> QIcon:
         """Create themed QIcon."""
-        if not name:
-            return QIcon()
-        pixmap: QPixmap = QPixmap(f"{self.__icons}/{name}.png")
-        if pixmap.isNull():
-            return QIcon()
-        painter: QPainter = QPainter()
-        if painter.begin(pixmap):
-            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
-            painter.fillRect(pixmap.rect(), QColor("white" if "dark" in self.__theme  else "black"))
-            painter.end()
-        return QIcon(pixmap)
-
-    def __create_label(self, text: str, size: str="", target: str="") -> QLabel:
-        """Create QLabel with dynamic QSS."""
-        size_map: dict[str, int] = {
-            "small": 2,
-            "medium": 4,
-            "large": 6 ,
-        }
-        label: QLabel = QLabel(text)
-        font: QFont = label.font()
-        font.setPointSize((size_map.get(size, size_map["small"]) * self.height()) // 100)
-        label.setFont(font)
-        if target:
-            label.setProperty("for", target)
-        self.__force_refresh(label)
-        return label
-
-    @staticmethod
-    def __create_separator(horizontal: bool=False) -> QFrame:
-        separator: QFrame = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine if horizontal else QFrame.Shape.VLine)
-        separator.setFrameShadow(QFrame.Shadow.Sunken)
-        separator.setLineWidth(1)
-        return separator
+        return utils.create_icon(name, self.__icons, AppConfig.get("theme"))
 
     def __create_system_tray(self) -> None:
         """Create and setup system tray icon."""
@@ -232,53 +176,6 @@ class MainWindow(QMainWindow):
         tray_menu.addAction(restore_action)
         tray_menu.addAction(quit_action)
         self.__tray_icon.show()
-
-    def __create_file_menu(self, menu_bar: QMenuBar) -> None:
-        """Create file menu section."""
-        file_menu: QMenu = menu_bar.addMenu(self.__create_icon("file"), "&File")
-        for action, trigger in [("export", self.__on_export_triggered),
-                                ("import", self.__on_import_triggered)]:
-            qaction: QAction = QAction(self.__create_icon(action),
-                                             f"&{action.title()}",
-                                             file_menu)
-            qaction.triggered.connect(trigger)
-            file_menu.addAction(qaction)
-
-    def __create_settings_menu(self, menu_bar: QMenuBar) -> None:
-        """Create settings menu."""
-        def update_start_minimized() -> None:
-            """Update start minimized setting."""
-            self.__start_minimized = not self.__start_minimized
-            start_icon = self.__create_icon("check" if self.__start_minimized else "")
-            start_minimized.setIcon(start_icon)
-
-        def update_minimize_on_exit() -> None:
-            """Update minimize on exit setting."""
-            self.__minimize_on_exit = not self.__minimize_on_exit
-            minimize_icon = self.__create_icon("check" if self.__minimize_on_exit else "")
-            minimize_on_exit.setIcon(minimize_icon)
-
-        settings_menu: QMenu = menu_bar.addMenu(self.__create_icon("settings"), "&Settings")
-        network_action: QAction = QAction(self.__create_icon("network"),
-                                         "&Source configuration",
-                                         settings_menu)
-        start_icon: QIcon = self.__create_icon("check" if self.__start_minimized else "")
-        start_minimized: QAction = QAction(start_icon, "Start minimized", settings_menu)
-        minimize_icon: QIcon = self.__create_icon("check" if self.__minimize_on_exit else "")
-        minimize_on_exit: QAction = QAction(minimize_icon, "Minimized on exit", settings_menu)
-        network_action.triggered.connect(self.__on_network_triggered)
-        start_minimized.triggered.connect(update_start_minimized)
-        minimize_on_exit.triggered.connect(update_minimize_on_exit)
-        settings_menu.addAction(network_action)
-        settings_menu.addAction(start_minimized)
-        settings_menu.addAction(minimize_on_exit)
-
-    def __create_menubar(self) -> None:
-        """Create and configure menubar."""
-        menu_bar: QMenuBar = QMenuBar(self)
-        self.__create_file_menu(menu_bar)
-        self.__create_settings_menu(menu_bar)
-        self.setMenuBar(menu_bar)
 
     def __export_current_configuration(self) -> dict[str, Any]:
         """Export current configuration."""
@@ -318,9 +215,9 @@ class MainWindow(QMainWindow):
         with open(self.__settings, "r") as f:
             settings = json.load(f)
         self.__load_configuration(settings.get("devices", {}))
-        self.__start_minimized = settings.get("start_minimized", False)
-        self.__minimize_on_exit = settings.get("minimize_on_exit", False)
-        self.__theme = settings.get("theme", "dark")
+        AppConfig.set("start_minimized", settings.get("start_minimized", False))
+        AppConfig.set("minimize_on_exit", settings.get("minimize_on_exit", False))
+        AppConfig.set("theme",  settings.get("theme", "dark"))
         if server_config := settings.get("server", {}):
             self.__server_config.ip = server_config.get("ip", "")
             self.__server_config.port = server_config.get("port", -1)
@@ -343,9 +240,8 @@ class MainWindow(QMainWindow):
                 "port": self.__server_config.port,
                 "rate": self.__server_config.rate,
             }
-            configuration["start_minimized"] = self.__start_minimized
-            configuration["minimize_on_exit"] = self.__minimize_on_exit
-            configuration["theme"] = self.__theme
+            for config in ["start_minimized", "minimize_on_exit", "theme"]:
+                configuration[config] = AppConfig.get(config)
             with open(self.__settings, "w") as f:
                 json.dump(configuration, f, indent=4)
             QApplication.quit()
@@ -358,46 +254,6 @@ class MainWindow(QMainWindow):
     def __on_tray_activated(self, reason: QEvent):
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
             self.__restore_window()
-
-    def __on_export_triggered(self, _event: QEvent) -> None:
-        """On Export action triggered."""
-        filename, _ = QFileDialog.getSaveFileName(self, "Export Configuration",
-                                                  "export_configuration", "JSON (*.json)")
-        if not filename:
-            return
-        message: str = "Current configuration successfully exported."
-        icon: QSystemTrayIcon.MessageIcon = QSystemTrayIcon.MessageIcon.Information
-        try:
-            with open(filename, "w") as f:
-                json.dump(self.__export_current_configuration(), f, indent=4)
-        except Exception as _:
-            message = "Failed to export configuration.\nPlease choose another location."
-            icon = QSystemTrayIcon.MessageIcon.Critical
-        self.__tray_icon.showMessage("Export Configuration", message, icon, 3000)
-
-    def __on_import_triggered(self, _event: QEvent) -> None:
-        """On Import action triggered."""
-        configuration: dict[str, Any] = {}
-        filename, _ = QFileDialog.getOpenFileName(self, "Select a Configuration", "",
-                                                  "JSON (*.json)")
-        if not filename:
-            return
-        message: str = "Current configuration successfully exported."
-        icon: QSystemTrayIcon.MessageIcon = QSystemTrayIcon.MessageIcon.Information
-        try:
-            with open(filename, "r") as f:
-                configuration = json.load(f)
-        except Exception as _:
-            message = "Failed to import configuration.\nPlease choose valid file."
-            icon = QSystemTrayIcon.MessageIcon.Critical
-        self.__load_configuration(configuration.get("devices", {}))
-        self.__update_signal.update()
-        self.__tray_icon.showMessage("Import Configuration", message, icon, 3000)
-
-    def __on_network_triggered(self, _event: QEvent) -> None:
-        """On Source Configuration triggered."""
-        dialog: SettingsDialog = SettingsDialog(self.__server_config)
-        dialog.exec()
 
     def __update_temps(self, cpu: float, gpu: float) -> None:
         """Update CPU and GPU temperatures."""
@@ -497,64 +353,6 @@ class MainWindow(QMainWindow):
             slider.setValue(speed)
             self.__update_slider_style(slider, speed)
 
-    def __create_temp_layout(self, source: str) -> QVBoxLayout:
-        """Create Temp layout."""
-        def update_temp_label(temps: dict[str, float]) -> None:
-            """Update temperature label."""
-            new_temp: float = temps.get(source, 0)
-            temp_label.setText(f"{new_temp} C")
-            temp_label.setStyleSheet(f"color: hsl({100 - new_temp}, 100%, 50%);")
-
-        def update_name_label(names: dict[str, str]) -> None:
-            """Update name label."""
-            new_name: str = names.get(source, "N/A")
-            name_label.setText(new_name)
-
-        temp_layout: QVBoxLayout = QVBoxLayout()
-        source_label: QLabel = self.__create_label(source, size="large", target="source")
-        name_label: QLabel = self.__create_label("N/A", size="small", target="source")
-        temp_label: QLabel = self.__create_label(f"{self.__temps[source]} C", size="medium")
-        self.__temps.value_changed.connect(lambda temps: update_temp_label(temps))
-        self.__names.value_changed.connect(lambda names: update_name_label(names))
-        temp_layout.addWidget(source_label, alignment=Qt.AlignmentFlag.AlignHCenter)
-        temp_layout.addWidget(name_label, alignment=Qt.AlignmentFlag.AlignHCenter)
-        temp_layout.addWidget(temp_label, alignment=Qt.AlignmentFlag.AlignHCenter)
-        temp_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        return temp_layout
-
-    def __create_temps_layout(self) -> QHBoxLayout:
-        """Create CPU and GPU temperatures layout."""
-        temps_layout: QHBoxLayout = QHBoxLayout()
-        sources: list[str] = ["CPU", "GPU"]
-        for source in sources:
-            temps_layout.addLayout(self.__create_temp_layout(source))
-            if source != sources[-1]:
-                temps_layout.addWidget(self.__create_separator())
-        return temps_layout
-
-    def __create_ruler(self, min_val: int=0, max_val: int=100, step: int=10,
-                             left: bool=True) -> QVBoxLayout:
-        layout: QVBoxLayout = QVBoxLayout()
-        layout.setSpacing(0)
-        layout.setContentsMargins(0, 0, 0, 0)
-        values: list[int] = list(reversed(range(min_val, max_val + 1, step)))
-        for i, value in enumerate(values):
-            step_layout: QHBoxLayout = QHBoxLayout()
-            label = QLabel(str(value))
-            alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignVCenter
-            alignment |= Qt.AlignmentFlag.AlignLeft if left else Qt.AlignmentFlag.AlignRight
-            if left:
-                step_layout.addWidget(label, alignment=alignment)
-                step_layout.addWidget(self.__create_separator(horizontal=True))
-            else:
-                step_layout.addWidget(self.__create_separator(horizontal=True))
-                step_layout.addWidget(label, alignment=alignment)
-            if i and i < len(values):
-                layout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Policy.Minimum,
-                                     QSizePolicy.Policy.Expanding))
-            layout.addLayout(step_layout)
-        return layout
-
     def __create_fan_slider(self, device_id: str, channel: str) -> QSlider:
         """Create FAN slider."""
         fan_slider: QSlider = QSlider(Qt.Orientation.Vertical)
@@ -583,7 +381,7 @@ class MainWindow(QMainWindow):
 
         fan_settings: QVBoxLayout = QVBoxLayout()
         source_layout: QHBoxLayout = QHBoxLayout()
-        source_layout.addWidget(self.__create_label("Source"))
+        source_layout.addWidget(utils.create_label("Source"))
         source_box: QComboBox = QComboBox()
         source_box.addItems([*self.__temps.get_data().keys()])
         source_box.currentTextChanged.connect(lambda source: self.__update_fan_source(device_id,
@@ -596,7 +394,7 @@ class MainWindow(QMainWindow):
         source_layout.addWidget(source_box)
         self.__update_fan_source(device_id, channel, current_text)
         mode_layout: QHBoxLayout = QHBoxLayout()
-        mode_layout.addWidget(self.__create_label("Mode"))
+        mode_layout.addWidget(utils.create_label("Mode"))
         mode_box: QComboBox = QComboBox()
         mode_box.addItems(["Normal", "Aggressive", "Silent", "Custom"])
         mode_box.currentTextChanged.connect(lambda mode: self.__update_fan_mode(device_id,
@@ -615,15 +413,14 @@ class MainWindow(QMainWindow):
 
     def __create_fan_layout(self, device_id: str, channel: str) -> QVBoxLayout:
         """Create fan layout."""
-
         fan_layout: QVBoxLayout = QVBoxLayout()
-        channel_label: QLabel = self.__create_label(channel, target="channel")
+        channel_label: QLabel = utils.create_label(channel, target="channel")
         fan_layout.addWidget(channel_label, alignment=Qt.AlignmentFlag.AlignHCenter)
         slider_layout: QHBoxLayout = QHBoxLayout()
-        slider_layout.addLayout(self.__create_ruler())
+        slider_layout.addLayout(utils.create_ruler())
         fan_slider: QSlider = self.__create_fan_slider(device_id, channel)
         slider_layout.addWidget(fan_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
-        slider_layout.addLayout(self.__create_ruler(left=False))
+        slider_layout.addLayout(utils.create_ruler(left=False))
         fan_layout.addLayout(slider_layout)
         fan_layout.addLayout(self.__create_fan_settings(device_id, channel))
         return fan_layout
@@ -631,14 +428,14 @@ class MainWindow(QMainWindow):
     def __create_device_layout(self, device: Any, device_id: str) -> QVBoxLayout:
         """Create Device Layout."""
         device_layout: QVBoxLayout = QVBoxLayout()
-        name_label: QLabel = self.__create_label(device.description, target="device")
+        name_label: QLabel = utils.create_label(device.description, target="device")
         device_layout.addWidget(name_label, alignment=Qt.AlignmentFlag.AlignCenter)
         fans_layout: QHBoxLayout = QHBoxLayout()
         channels: list[str] = list(device._speed_channels.keys())
         for channel in channels:
             fans_layout.addLayout(self.__create_fan_layout(device_id, channel))
             if channel != channels[-1]:
-                fans_layout.addWidget(self.__create_separator())
+                fans_layout.addWidget(utils.create_separator())
         device_layout.addLayout(fans_layout)
         return device_layout
 
@@ -648,15 +445,15 @@ class MainWindow(QMainWindow):
         for device_id, device in enumerate(self.__devices):
             devices_layout.addLayout(self.__create_device_layout(device, str(device_id)))
             if device != self.__devices[-1]:
-                devices_layout.addWidget(self.__create_separator())
+                devices_layout.addWidget(utils.create_separator())
         return devices_layout
 
     def __configure_layouts(self, central_widget: QWidget) -> None:
         """Create and configure layouts."""
         main_layout: QVBoxLayout = QVBoxLayout()
         central_widget.setLayout(main_layout)
-        main_layout.addLayout(self.__create_temps_layout())
-        main_layout.addWidget(self.__create_separator(horizontal=True))
+        main_layout.addLayout(TemperatureSection(self.__temps, self.__names))
+        main_layout.addWidget(utils.create_separator(horizontal=True))
         main_layout.addLayout(self.__create_devices_layout())
 
     def __create_central_widget(self) -> None:
@@ -664,7 +461,7 @@ class MainWindow(QMainWindow):
         central_widget: QWidget = QWidget()
         central_widget.setAutoFillBackground(True)
         central_widget.setProperty("id", "central")
-        self.__force_refresh(central_widget)
+        utils.force_refresh(central_widget)
         self.__configure_layouts(central_widget)
         self.setCentralWidget(central_widget)
 
@@ -689,7 +486,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent):
         """Override the close event to handle application minimize to system tray."""
         event.ignore()
-        if not self.__minimize_on_exit:
+        if not AppConfig.get("minimize_on_exit"):
             self.__close()
             return
         QTimer.singleShot(0, self.hide)
