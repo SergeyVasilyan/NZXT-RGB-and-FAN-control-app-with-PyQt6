@@ -29,8 +29,8 @@ class Worker(QThread):
             rpms[device_id] = {}
             reports: list[tuple] = []
             try:
-                reports = device.get_status()
-            except Exception as _: 
+                reports = device.get_status(max_attempts=6)
+            except Exception as _:
                 continue
             for report in reports:
                 if "rpm" in report[-1]:
@@ -129,6 +129,12 @@ class DeviceSection(QHBoxLayout):
         sources[device_id][channel] = source
         self.__sources[device_id] = sources[device_id]
 
+    def __update_value_on_import(self, device_id: str, channel: str, mode_box: QComboBox,
+                                       source_box: QComboBox) -> None:
+        """Update mode on Import."""
+        mode_box.setCurrentText(self.__modes[device_id][channel])
+        source_box.setCurrentText(self.__sources[device_id][channel])
+
     @staticmethod
     def __get_channel_mode(new_modes: dict[str, Any]|ObservableDict, device_id: str,
                            channel: str) -> str:
@@ -189,12 +195,9 @@ class DeviceSection(QHBoxLayout):
         self.__update_slider_style(fan_slider, 30)
         return fan_slider
 
+        
     def __create_fan_settings(self, device_id: str, channel: str) -> QVBoxLayout:
         """Create fan settings layout."""
-        def update_value_on_import() -> None:
-            """Update mode on Import."""
-            mode_box.setCurrentText(self.__modes[device_id][channel])
-            source_box.setCurrentText(self.__sources[device_id][channel])
 
         fan_settings: QVBoxLayout = QVBoxLayout()
         source_layout: QHBoxLayout = QHBoxLayout()
@@ -222,7 +225,10 @@ class DeviceSection(QHBoxLayout):
             current_text = self.__modes[device_id][channel]
             mode_box.setCurrentText(current_text)
         self.__update_fan_mode(device_id, channel, current_text)
-        self.__update_signal.imported.connect(update_value_on_import)
+        self.__update_signal.imported.connect(lambda: self.__update_value_on_import(device_id,
+                                                                                    channel,
+                                                                                    mode_box,
+                                                                                    source_box))
         mode_layout.addWidget(mode_box)
         fan_settings.addLayout(source_layout)
         fan_settings.addLayout(mode_layout)

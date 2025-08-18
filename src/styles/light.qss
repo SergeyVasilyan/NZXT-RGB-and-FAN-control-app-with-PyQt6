@@ -21,10 +21,15 @@ QLineEdit {
 
 QComboBox {
     background-color: hsl(0, 0%, 70%);
+    border-radius: 4px;
     color: hsl(0, 0, 0%);
+    padding: 5px 20px 5px 10px;
 }
 
 QComboBox::down-down {
+    background: transparent;
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
     width: 12px;
     height: 12px;
 }

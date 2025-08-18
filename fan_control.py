@@ -53,11 +53,12 @@ class Worker(QThread):
     temps: pyqtSignal = pyqtSignal(float, float)
     names: pyqtSignal = pyqtSignal(str, str)
 
-    def __init__(self, config: ServerConfiguration, min_temp: float=30.) -> None:
+    def __init__(self, config: ServerConfiguration, temp_source: dict[str, str], min_temp: float=30.) -> None:
         """INIT."""
         super().__init__()
         self.__min_temp: float = min_temp
         self.__config: ServerConfiguration = config
+        self.__temp_source: dict[str, str] = temp_source
 
     def __get_temp(self) -> tuple[str, float, str, float]:
         """Get CPU Core Average and GPU temperature from LibreHardwareMonitor server."""
@@ -82,7 +83,7 @@ class Worker(QThread):
                     for sensor in hw["Children"]:
                         if "Temperatures" in sensor["Text"]:
                             for temp_sensor in sensor["Children"]:
-                                if "Core Average" in temp_sensor["Text"]:
+                                if self.__temp_source["CPU"] in temp_sensor["Text"]:
                                     cpu_name = hw["Text"]
                                     cpu_temp = float(temp_sensor["Value"].replace(" °C", ""))
                                     is_cpu_set = True
@@ -90,7 +91,7 @@ class Worker(QThread):
                     for sensor in hw["Children"]:
                         if "Temperatures" in sensor["Text"]:
                             for temp_sensor in sensor["Children"]:
-                                if "GPU Core" in temp_sensor["Text"]:
+                                if self.__temp_source["GPU"] in temp_sensor["Text"]:
                                     gpu_name = hw["Text"]
                                     gpu_temp = float(temp_sensor["Value"].replace(" °C", ""))
                                     is_gpu_set = True
@@ -124,7 +125,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(self.__app_name)
         self.setMinimumSize(QSize(screen_size.width() // 2, screen_size.height() // 2))
         self.setWindowIcon(self.__create_icon("icon"))
-        self.__load_settings()
         self.__theme_manager.apply_theme(AppConfig.get("theme"))
         self.__devices: list[Any] = self.__init_devices()
         self.__min_temp: int = 30
@@ -138,7 +138,12 @@ class MainWindow(QMainWindow):
             "CPU": "N/A",
             "GPU": "N/A",
         })
-        self.__worker: Worker = Worker(self.__server_config, min_temp=self.__min_temp)
+        self.__temp_source: dict[str, str] = {
+            "CPU": "Core Average",
+            "GPU": "GPU Core",
+        }
+        self.__load_settings()
+        self.__worker: Worker = Worker(self.__server_config, self.__temp_source, self.__min_temp)
         self.__worker.temps.connect(self.__update_temps)
         self.__worker.names.connect(self.__update_names)
         self.__worker.start()
@@ -214,11 +219,13 @@ class MainWindow(QMainWindow):
         self.__load_configuration(settings.get("devices", {}))
         AppConfig.set("start_minimized", settings.get("start_minimized", False))
         AppConfig.set("minimize_on_exit", settings.get("minimize_on_exit", False))
-        AppConfig.set("theme",  settings.get("theme", "dark"))
+        AppConfig.set("theme", settings.get("theme", "dark"))
         if server_config := settings.get("server", {}):
             self.__server_config.ip = server_config.get("ip", "")
             self.__server_config.port = server_config.get("port", -1)
             self.__server_config.rate = server_config.get("rate", 1)
+        if temp_source := settings.get("sources", {}):
+            self.__temp_source = temp_source
 
     def __close(self) -> None:
         """Close app normally."""
@@ -237,6 +244,7 @@ class MainWindow(QMainWindow):
                 "port": self.__server_config.port,
                 "rate": self.__server_config.rate,
             }
+            configuration["sources"] = self.__temp_source
             for config in ["start_minimized", "minimize_on_exit", "theme"]:
                 configuration[config] = AppConfig.get(config)
             with open(self.__settings, "w") as f:
@@ -268,7 +276,7 @@ class MainWindow(QMainWindow):
         """Create and configure layouts."""
         main_layout: QVBoxLayout = QVBoxLayout()
         central_widget.setLayout(main_layout)
-        main_layout.addLayout(TemperatureSection(self.__temps, self.__names))
+        main_layout.addLayout(TemperatureSection(self.__temps, self.__names, self.__temp_source))
         main_layout.addWidget(utils.create_separator(horizontal=True))
         main_layout.addLayout(DeviceSection(self.__devices, self.__modes, self.__sources,
                                             self.__temps, self.__update_signal, self.__min_temp,
