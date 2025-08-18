@@ -125,7 +125,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(self.__app_name)
         self.setMinimumSize(QSize(screen_size.width() // 2, screen_size.height() // 2))
         self.setWindowIcon(self.__create_icon("icon"))
-        self.__theme_manager.apply_theme(AppConfig.get("theme"))
         self.__devices: list[Any] = self.__init_devices()
         self.__min_temp: int = 30
         self.__temps: ObservableDict = ObservableDict({
@@ -143,6 +142,7 @@ class MainWindow(QMainWindow):
             "GPU": "GPU Core",
         }
         self.__load_settings()
+        self.__theme_manager.apply_theme(AppConfig.get("theme"))
         self.__worker: Worker = Worker(self.__server_config, self.__temp_source, self.__min_temp)
         self.__worker.temps.connect(self.__update_temps)
         self.__worker.names.connect(self.__update_names)
