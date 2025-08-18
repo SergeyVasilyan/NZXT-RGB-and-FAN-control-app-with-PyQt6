@@ -5,7 +5,7 @@ from typing import Any
 
 import src.utils.common as utils
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QSlider, QVBoxLayout
+from PyQt6.QtWidgets import QComboBox, QGridLayout, QHBoxLayout, QLabel, QSlider, QVBoxLayout
 from src.utils.common import ImportSignal
 from src.utils.observable_dict import ObservableDict
 from src.widgets.settings_dialog import ServerConfiguration
@@ -196,12 +196,11 @@ class DeviceSection(QHBoxLayout):
         return fan_slider
 
         
-    def __create_fan_settings(self, device_id: str, channel: str) -> QVBoxLayout:
+    def __create_fan_settings(self, device_id: str, channel: str) -> QGridLayout:
         """Create fan settings layout."""
-
-        fan_settings: QVBoxLayout = QVBoxLayout()
-        source_layout: QHBoxLayout = QHBoxLayout()
-        source_layout.addWidget(utils.create_label("Source"))
+        fan_settings: QGridLayout = QGridLayout()
+        fan_settings.addWidget(utils.create_label("Source"), 0, 0,
+                               alignment=Qt.AlignmentFlag.AlignRight)
         source_box: QComboBox = QComboBox()
         source_box.addItems([*self.__temps.get_data().keys()])
         source_box.currentTextChanged.connect(lambda source: self.__update_fan_source(device_id,
@@ -211,10 +210,10 @@ class DeviceSection(QHBoxLayout):
         if device_id in self.__sources:
             current_text = self.__sources[device_id][channel]
             source_box.setCurrentText(current_text)
-        source_layout.addWidget(source_box)
+        fan_settings.addWidget(source_box, 0, 1)
         self.__update_fan_source(device_id, channel, current_text)
-        mode_layout: QHBoxLayout = QHBoxLayout()
-        mode_layout.addWidget(utils.create_label("Mode"))
+        fan_settings.addWidget(utils.create_label("Mode"), 1, 0,
+                               alignment=Qt.AlignmentFlag.AlignRight)
         mode_box: QComboBox = QComboBox()
         mode_box.addItems(["Normal", "Aggressive", "Silent", "Custom"])
         mode_box.currentTextChanged.connect(lambda mode: self.__update_fan_mode(device_id,
@@ -229,9 +228,7 @@ class DeviceSection(QHBoxLayout):
                                                                                     channel,
                                                                                     mode_box,
                                                                                     source_box))
-        mode_layout.addWidget(mode_box)
-        fan_settings.addLayout(source_layout)
-        fan_settings.addLayout(mode_layout)
+        fan_settings.addWidget(mode_box, 1, 1)
         return fan_settings
 
     def __create_fan_layout(self, device_id: str, channel: str) -> QVBoxLayout:

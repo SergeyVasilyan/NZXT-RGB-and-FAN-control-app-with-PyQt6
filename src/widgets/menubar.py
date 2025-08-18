@@ -70,7 +70,7 @@ class MenuBar(QMenuBar):
 
     def __on_network_triggered(self, _event: QEvent) -> None:
         """On Source Configuration triggered."""
-        dialog: SettingsDialog = SettingsDialog(self.__server_config)
+        dialog: SettingsDialog = SettingsDialog(self.__server_config, self)
         dialog.exec()
 
     def __create_file_menu(self) -> None:
