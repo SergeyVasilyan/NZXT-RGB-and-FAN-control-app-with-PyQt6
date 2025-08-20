@@ -152,7 +152,7 @@ class MainWindow(QMainWindow):
         self.__create_system_tray()
         self.setMenuBar(MenuBar(self.__icons, self.__server_config, self.__update_signal,
                                 self.__export_current_configuration, self.__load_configuration,
-                                self.__tray_icon))
+                                self.__theme_manager, self.__tray_icon))
         self.__create_central_widget()
         self.__connect_devices()
         if AppConfig.get("start_minimized"):

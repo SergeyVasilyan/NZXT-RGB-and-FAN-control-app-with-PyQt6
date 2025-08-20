@@ -1,5 +1,6 @@
 """Theme manager."""
 
+import os
 from PyQt6.QtWidgets import QApplication
 
 
@@ -18,6 +19,17 @@ class ThemeManager:
                 return f.read()
         except FileNotFoundError:
             return ""
+
+    def get_themes(self) -> list[str]:
+        """Get all available themes."""
+        themes: list[str] = []
+        for _, _, files in os.walk(self.__path):
+            if not files:
+                continue
+            for file in files:
+                if ".qss" in file.lower():
+                    themes.append(os.path.splitext(file)[0])
+        return themes
 
     def apply_theme(self, name: str) -> None:
         """Apply given theme."""

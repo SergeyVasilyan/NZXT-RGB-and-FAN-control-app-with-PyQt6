@@ -1,7 +1,5 @@
 """Temperature Section."""
 
-
-from re import L
 import src.utils.common as utils
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QVBoxLayout

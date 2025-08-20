@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import QFileDialog, QMenu, QMenuBar, QSystemTrayIcon
 from src.utils.common import ImportSignal
 from src.widgets.config import AppConfig
 from src.widgets.settings_dialog import ServerConfiguration, SettingsDialog
+from src.widgets.theme_manager import ThemeManager
 
 
 class MenuBar(QMenuBar):
@@ -17,17 +18,17 @@ class MenuBar(QMenuBar):
 
     def __init__(self, icons: str, server_config: ServerConfiguration,
                        update_signal: ImportSignal, export_configuration: Callable,
-                       load_configuration: Callable, tray: QSystemTrayIcon) -> None:
+                       load_configuration: Callable, theme_manager: ThemeManager,
+                       tray: QSystemTrayIcon) -> None:
         """INIT."""
         super().__init__()
         self.__icons: str = icons
-        self.__server_config: ServerConfiguration = server_config
         self.__export: Callable = export_configuration
         self.__load: Callable = load_configuration
         self.__tray: QSystemTrayIcon = tray
         self.__update_signal: ImportSignal = update_signal
         self.__create_file_menu()
-        self.__create_settings_menu()
+        self.__create_settings_menu(server_config, theme_manager)
 
     def __create_icon(self, name: str) -> QIcon:
         """Create themed QIcon."""
@@ -67,9 +68,10 @@ class MenuBar(QMenuBar):
         self.__update_signal.update()
         self.__tray.showMessage("Import Configuration", message, icon, 3000)
 
-    def __on_network_triggered(self, _event: QEvent) -> None:
+    def __on_network_triggered(self, server_config: ServerConfiguration,
+                                     theme_manager: ThemeManager) -> None:
         """On Source Configuration triggered."""
-        dialog: SettingsDialog = SettingsDialog(self.__server_config, self.__export, self)
+        dialog: SettingsDialog = SettingsDialog(server_config, theme_manager, self.__export, self)
         dialog.exec()
 
     def __create_file_menu(self) -> None:
@@ -81,7 +83,9 @@ class MenuBar(QMenuBar):
             action.triggered.connect(trigger)
             file_menu.addAction(action)
 
-    def __create_settings_menu(self) -> None:
+    def __create_settings_menu(self, server_config: ServerConfiguration,
+                                     theme_manager: ThemeManager) -> None:
         """Create settings menu."""
         network_action: QAction = self.addAction(self.__create_icon("settings"), "&Settings")
-        network_action.triggered.connect(self.__on_network_triggered)
+        network_action.triggered.connect(lambda _: self.__on_network_triggered(server_config,
+                                                                               theme_manager))
