@@ -179,7 +179,8 @@ class MainWindow(QMainWindow):
         tray_menu.addAction(quit_action)
         self.__tray_icon.show()
 
-    def __export_current_configuration(self) -> dict[str, Any]:
+    def __export_current_configuration(self, /, *, filename: str="",
+                                             settings: bool=False) -> dict[str, Any]:
         """Export current configuration."""
         devices: dict[str, Any] = {}
         modes: dict[str, Any] = self.__modes.get_data()
@@ -192,9 +193,22 @@ class MainWindow(QMainWindow):
                     "source": sources[device_id][fan_id],
                 }
         configuration: dict[str, Any] = {
-            "date": str(datetime.now()),
             "devices": devices,
         }
+        if settings:
+            filename = self.__settings
+            configuration["sources"] = self.__temp_source
+            configuration["server"] = {
+                "ip": self.__server_config.ip,
+                "port": self.__server_config.port,
+                "rate": self.__server_config.rate,
+            }
+            for config in ["start_minimized", "minimize_on_exit", "theme"]:
+                configuration[config] = AppConfig.get(config)
+        configuration["date"] = str(datetime.now())
+        if filename:
+            with open(filename, "w") as f:
+                json.dump(configuration, f, indent=4)
         return configuration
 
     def __load_configuration(self, configuration: dict[str, Any]) -> None:
@@ -238,17 +252,7 @@ class MainWindow(QMainWindow):
         if QMessageBox.StandardButton.Yes == reply:
             for device in self.__devices:
                 device.disconnect()
-            configuration: dict[str, Any] = self.__export_current_configuration()
-            configuration["server"] = {
-                "ip": self.__server_config.ip,
-                "port": self.__server_config.port,
-                "rate": self.__server_config.rate,
-            }
-            configuration["sources"] = self.__temp_source
-            for config in ["start_minimized", "minimize_on_exit", "theme"]:
-                configuration[config] = AppConfig.get(config)
-            with open(self.__settings, "w") as f:
-                json.dump(configuration, f, indent=4)
+            self.__export_current_configuration(settings=True)
             QApplication.quit()
 
     def __restore_window(self) -> None:

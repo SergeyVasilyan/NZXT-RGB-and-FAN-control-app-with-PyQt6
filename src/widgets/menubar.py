@@ -42,8 +42,7 @@ class MenuBar(QMenuBar):
         message: str = "Current configuration successfully exported."
         icon: QSystemTrayIcon.MessageIcon = QSystemTrayIcon.MessageIcon.Information
         try:
-            with open(filename, "w") as f:
-                json.dump(self.__export(), f, indent=4)
+            self.__export(filename=filename)
         except Exception as _:
             message = "Failed to export configuration.\nPlease choose another location."
             icon = QSystemTrayIcon.MessageIcon.Critical
@@ -70,7 +69,7 @@ class MenuBar(QMenuBar):
 
     def __on_network_triggered(self, _event: QEvent) -> None:
         """On Source Configuration triggered."""
-        dialog: SettingsDialog = SettingsDialog(self.__server_config, self)
+        dialog: SettingsDialog = SettingsDialog(self.__server_config, self.__export, self)
         dialog.exec()
 
     def __create_file_menu(self) -> None:
@@ -81,26 +80,8 @@ class MenuBar(QMenuBar):
             action: QAction = QAction(self.__create_icon(name), f"&{name.title()}", file_menu)
             action.triggered.connect(trigger)
             file_menu.addAction(action)
-    
-    def __update_value(self, action: QAction, key: str) -> None:
-        """Update start minimized setting."""
-        value: bool = not AppConfig.get(key)
-        start_icon = self.__create_icon("check" if value else "")
-        AppConfig.set(key, value)
-        action.setIcon(start_icon)
 
     def __create_settings_menu(self) -> None:
         """Create settings menu."""
-        settings_menu: QMenu = self.addMenu(self.__create_icon("settings"), "&Settings")
-        network_action: QAction = QAction(self.__create_icon("network"), "&Source configuration",
-                                          settings_menu)
-        start_icon: QIcon = self.__create_icon("check" if AppConfig.get("start_minimized") else "")
-        start_minimized: QAction = QAction(start_icon, "Start minimized", settings_menu)
-        minimize_icon: QIcon = self.__create_icon("check" if AppConfig.get("minimize_on_exit") else "")
-        minimize_on_exit: QAction = QAction(minimize_icon, "Minimized on exit", settings_menu)
+        network_action: QAction = self.addAction(self.__create_icon("settings"), "&Settings")
         network_action.triggered.connect(self.__on_network_triggered)
-        start_minimized.triggered.connect(lambda: self.__update_value(start_minimized, "start_minimized"))
-        minimize_on_exit.triggered.connect(lambda: self.__update_value(minimize_on_exit, "minimize_on_exit"))
-        settings_menu.addAction(network_action)
-        settings_menu.addAction(start_minimized)
-        settings_menu.addAction(minimize_on_exit)

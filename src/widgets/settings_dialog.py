@@ -1,11 +1,13 @@
 """Settings dialog."""
 
 from dataclasses import dataclass
+from typing import Callable
 
 import src.utils.common as utils
-from PyQt6.QtCore import QObject, QRegularExpression, Qt
+from PyQt6.QtCore import QRegularExpression, Qt
 from PyQt6.QtGui import QRegularExpressionValidator
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QDoubleSpinBox,
     QGridLayout,
@@ -14,6 +16,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QWidget,
 )
+from src.widgets.config import AppConfig
 
 
 @dataclass
@@ -27,16 +30,20 @@ class ServerConfiguration:
 class SettingsDialog(QDialog):
     """Simple Settings selection Dialog."""
 
-    def __init__(self, config: ServerConfiguration, parent: QWidget|None=None) -> None:
+    def __init__(self, config: ServerConfiguration, export: Callable, parent: QWidget|None=None) -> None:
         """INIT."""
         super().__init__(parent)
         if parent:
             self.setWindowIcon(parent.windowIcon())
         self.setWindowTitle("Settings")
-        self.setFixedSize(300, 150)
+        self.setFixedSize(250, 200)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowMaximizeButtonHint)
+        self.__export: Callable = export
         self.__ip_input: QLineEdit
         self.__port_input: QLineEdit
         self.__rate_spin_box: QDoubleSpinBox
+        self.__start_minimized: QCheckBox
+        self.__minimize_on_exit: QCheckBox
         self.__config: ServerConfiguration = config
         self.__create_layout()
 
@@ -52,19 +59,21 @@ class SettingsDialog(QDialog):
             if not 1 <= port <= 65535:
                 raise ValueError
         except ValueError:
-            QMessageBox.warning(self, "Invalid Port",
-                                "Port must be an integer between 1 and 65535.")
+            QMessageBox.warning(self, "Invalid Port", "Port must be an integer between 1 and 65535.")
             return
         rate: float = round(self.__rate_spin_box.value(), 2)
         self.__config.ip = ip_text
         self.__config.port = port_text
         self.__config.rate = rate
-        QMessageBox.information(self, "Success", f"IP: {ip_text}\nPort: {port_text}\nRate: {rate}")
+        AppConfig.set("start_minimized", self.__start_minimized.isChecked())
+        AppConfig.set("minimize_on_exit", self.__minimize_on_exit.isChecked())
+        self.__export(settings=True)
+        QMessageBox.information(self, "Success", "Settings saved successfully")
         self.close()
 
-    def __create_ip_section(self, layout: QGridLayout) -> None:
+    def __create_ip_section(self, layout: QGridLayout, row: int) -> int:
         """Create IP section."""
-        layout.addWidget(utils.create_label("IP Address"), 0, 0,
+        layout.addWidget(utils.create_label("IP Address"), row, 0,
                          alignment=Qt.AlignmentFlag.AlignRight)
         self.__ip_input = QLineEdit()
         self.__ip_input.setText(self.__config.ip)
@@ -74,11 +83,12 @@ class SettingsDialog(QDialog):
             r"(\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)){3}$"
         )
         self.__ip_input.setValidator(QRegularExpressionValidator(ip_regex))
-        layout.addWidget(self.__ip_input, 0, 1, 1, 2)
+        layout.addWidget(self.__ip_input, row, 1, 1, 2)
+        return row + 1
 
-    def __create_port_section(self, layout: QGridLayout) -> None:
+    def __create_port_section(self, layout: QGridLayout, row: int) -> int:
         """Create PORT section."""
-        layout.addWidget(utils.create_label("Port"), 1, 0,
+        layout.addWidget(utils.create_label("Port"), row, 0,
                          alignment=Qt.AlignmentFlag.AlignRight)
         self.__port_input = QLineEdit()
         self.__port_input.setText(str(self.__config.port))
@@ -88,27 +98,48 @@ class SettingsDialog(QDialog):
             r"^(6553[0-5]|655[0-2]\d|65[0-4]\d{2}|6[0-4]\d{3}|[1-5]\d{4}|\d{1,4})$"
         )
         self.__port_input.setValidator(QRegularExpressionValidator(port_regex))
-        layout.addWidget(self.__port_input, 1, 1, 1, 2)
+        layout.addWidget(self.__port_input, row, 1, 1, 2)
+        return row + 1
 
-    def __create_rate_section(self, layout: QGridLayout) -> None:
+    def __create_rate_section(self, layout: QGridLayout, row: int) -> int:
         """Create Rate section."""
-        layout.addWidget(utils.create_label("Rate (in seconds)"), 2, 0,
+        layout.addWidget(utils.create_label("Rate (in seconds)"), row, 0,
                          alignment=Qt.AlignmentFlag.AlignRight)
         self.__rate_spin_box = QDoubleSpinBox()
         self.__rate_spin_box.setRange(0.1, 10.0)
         self.__rate_spin_box.setSingleStep(0.1)
         self.__rate_spin_box.setValue(self.__config.rate)
-        layout.addWidget(self.__rate_spin_box, 2, 1, 1 ,2)
+        layout.addWidget(self.__rate_spin_box, row, 1, 1 ,2)
+        return row + 1
+
+    def __create_minimize_section(self, layout: QGridLayout, row: int) -> int:
+        """Create Minimize section."""
+        layout.addWidget(utils.create_label("Start minimized"), row, 0,
+                         alignment=Qt.AlignmentFlag.AlignRight)
+        self.__start_minimized = QCheckBox()
+        self.__start_minimized.setChecked(AppConfig.get("start_minimized"))
+        layout.addWidget(self.__start_minimized, row, 1, 1, 2)
+        row += 1
+        layout.addWidget(utils.create_label("Minimize on Exit"), row, 0,
+                         alignment=Qt.AlignmentFlag.AlignRight)
+        self.__minimize_on_exit = QCheckBox()
+        self.__minimize_on_exit.setChecked(AppConfig.get("minimize_on_exit"))
+        layout.addWidget(self.__minimize_on_exit, row, 1, 1, 2)
+        return row + 1
 
     def __create_layout(self) -> None:
         """Create Dialog layout."""
         layout: QGridLayout = QGridLayout()
-        self.__create_ip_section(layout)
-        self.__create_port_section(layout)
-        self.__create_rate_section(layout)
-        submit_btn: QPushButton = QPushButton("Save")
+        row: int = 0
+        row = self.__create_ip_section(layout, row)
+        row = self.__create_port_section(layout, row)
+        row = self.__create_rate_section(layout, row)
+        layout.addWidget(utils.create_separator(horizontal=True), row, 0, 1, 3)
+        row += 1
+        row = self.__create_minimize_section(layout, row)
+        submit_btn: QPushButton = QPushButton("Apply")
         submit_btn.clicked.connect(self.__validate_inputs)
-        layout.addWidget(submit_btn, 3, 0, 1, 3, alignment=Qt.AlignmentFlag.AlignHCenter)
+        layout.addWidget(submit_btn, row, 0, 1, 3, alignment=Qt.AlignmentFlag.AlignHCenter)
         self.setLayout(layout)
 
 if "__main__" == __name__:
