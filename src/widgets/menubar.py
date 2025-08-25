@@ -8,6 +8,7 @@ from PyQt6.QtCore import QEvent
 from PyQt6.QtGui import QAction, QIcon
 from PyQt6.QtWidgets import QFileDialog, QMenu, QMenuBar, QSystemTrayIcon
 from src.utils.common import ImportSignal
+from src.widgets.about import AboutPopup
 from src.widgets.config import AppConfig
 from src.widgets.settings_dialog import ServerConfiguration, SettingsDialog
 from src.widgets.theme_manager import ThemeManager
@@ -29,6 +30,7 @@ class MenuBar(QMenuBar):
         self.__update_signal: ImportSignal = update_signal
         self.__create_file_menu()
         self.__create_settings_menu(server_config, theme_manager)
+        self.__create_about()
 
     def __create_icon(self, name: str) -> QIcon:
         """Create themed QIcon."""
@@ -89,3 +91,13 @@ class MenuBar(QMenuBar):
         network_action: QAction = self.addAction(self.__create_icon("settings"), "&Settings")
         network_action.triggered.connect(lambda _: self.__on_network_triggered(server_config,
                                                                                theme_manager))
+
+    def __on_about_triggered(self) -> None:
+        """On Source Configuration triggered."""
+        dialog: AboutPopup = AboutPopup(self.__icons, self.parentWidget())
+        dialog.exec()
+
+    def __create_about(self) -> None:
+        """Create about popup."""
+        about_action: QAction = self.addAction(self.__create_icon("info"), "&About")
+        about_action.triggered.connect(self.__on_about_triggered)

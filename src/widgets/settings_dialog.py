@@ -40,6 +40,7 @@ class SettingsDialog(QDialog):
             self.setWindowIcon(parent.windowIcon())
         self.setWindowTitle("Settings")
         self.setFixedSize(300, 250)
+        self.setModal(True)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowMaximizeButtonHint)
         self.__config: ServerConfiguration = config
         self.__theme_manager: ThemeManager = theme_manager
