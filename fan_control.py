@@ -40,6 +40,7 @@ from PyQt6.QtWidgets import (
 from src.layouts.device import DeviceSection
 from src.layouts.temp import TemperatureSection
 from src.utils.common import ImportSignal
+from src.utils.dummy import DummyDevice
 from src.utils.observable_dict import ObservableDict
 from src.widgets.application import Application
 from src.widgets.config import AppConfig
@@ -297,7 +298,10 @@ class MainWindow(QMainWindow):
 
     def __init_devices(self) -> list[Any]:
         devices: list[Any] = []
-        for device in find_liquidctl_devices():
+        potential_devices: list[Any] = list(find_liquidctl_devices())
+        if not potential_devices:
+            potential_devices = [DummyDevice() for _ in range(3)]
+        for device in potential_devices:
             device.connect()
             if "NZXT" not in device.description:
                 continue
