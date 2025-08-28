@@ -118,6 +118,8 @@ class DeviceSection(QHBoxLayout):
         modes: dict[str, Any] = self.__modes.get_data()
         if device_id not in modes:
             modes[device_id] = {}
+        if channel not in modes[device_id]:
+            modes[device_id][channel] = {}
         modes[device_id][channel] = mode
         self.__modes[device_id] = modes[device_id]
 
@@ -126,6 +128,8 @@ class DeviceSection(QHBoxLayout):
         sources: dict[str, Any] = self.__sources.get_data()
         if device_id not in sources:
             sources[device_id] = {}
+        if channel not in sources[device_id]:
+            sources[device_id][channel] = {}
         sources[device_id][channel] = source
         self.__sources[device_id] = sources[device_id]
 
@@ -207,7 +211,7 @@ class DeviceSection(QHBoxLayout):
                                                                                       channel,
                                                                                       source))
         current_text: str = source_box.currentText()
-        if device_id in self.__sources:
+        if device_id in self.__sources and channel in self.__sources[device_id]:
             current_text = self.__sources[device_id][channel]
             source_box.setCurrentText(current_text)
         fan_settings.addWidget(source_box, 0, 1)
@@ -220,7 +224,7 @@ class DeviceSection(QHBoxLayout):
                                                                                 channel,
                                                                                 mode))
         current_text: str = mode_box.currentText()
-        if device_id in self.__modes:
+        if device_id in self.__modes and channel in self.__modes[device_id]:
             current_text = self.__modes[device_id][channel]
             mode_box.setCurrentText(current_text)
         self.__update_fan_mode(device_id, channel, current_text)
