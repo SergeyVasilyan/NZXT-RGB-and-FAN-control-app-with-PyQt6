@@ -208,7 +208,7 @@ class MainWindow(QMainWindow):
     def __load_configuration(self, filename: str) -> None:
         """Load configuration."""
         configuration: dict[str, Any] = {}
-        message: str = "Current configuration successfully exported."
+        message: str = "Current configuration successfully imported."
         icon: QSystemTrayIcon.MessageIcon = QSystemTrayIcon.MessageIcon.Information
         try:
             with open(filename, "r") as f:
