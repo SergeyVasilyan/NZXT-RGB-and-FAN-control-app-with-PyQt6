@@ -1,5 +1,7 @@
 """Common functions between all modules."""
 
+from enum import StrEnum
+import os
 from PyQt6.QtCore import QObject, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import (
@@ -12,6 +14,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+
+class PathManager(StrEnum):
+    """Path Manager class."""
+
+    SOURCE = "src"
+    ICONS = os.path.join(SOURCE, "icons")
+    PRESETS = os.path.join(SOURCE, "presets")
 
 class ImportSignal(QObject):
     """Simple import update signal."""
@@ -54,11 +63,11 @@ def create_label(text: str, size: str="", target: str="") -> QLabel:
     force_refresh(label)
     return label
 
-def create_icon(name: str, src: str, theme: str) -> QIcon:
+def create_icon(name: str, theme: str) -> QIcon:
     """Create themed QIcon."""
     if not name:
         return QIcon()
-    pixmap: QPixmap = QPixmap(f"{src}/{name}.png")
+    pixmap: QPixmap = QPixmap(f"{PathManager.ICONS}/{name}.png")
     if pixmap.isNull():
         return QIcon()
     painter: QPainter = QPainter()

@@ -30,6 +30,8 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QApplication,
+    QComboBox,
+    QHBoxLayout,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -39,7 +41,7 @@ from PyQt6.QtWidgets import (
 )
 from src.layouts.device import DeviceSection
 from src.layouts.temp import TemperatureSection
-from src.utils.common import ImportSignal
+from src.utils.common import ImportSignal, PathManager
 from src.utils.dummy import DummyDevice
 from src.utils.observable_dict import ObservableDict
 from src.widgets.application import Application
@@ -54,7 +56,8 @@ class Worker(QThread):
     temps: pyqtSignal = pyqtSignal(float, float)
     names: pyqtSignal = pyqtSignal(str, str)
 
-    def __init__(self, config: ServerConfiguration, temp_source: dict[str, str], min_temp: float=30.) -> None:
+    def __init__(self, config: ServerConfiguration, temp_source: dict[str, str],
+                       min_temp: float=30.) -> None:
         """INIT."""
         super().__init__()
         self.__min_temp: float = min_temp
@@ -112,7 +115,6 @@ class MainWindow(QMainWindow):
     def __init__(self, app_name: str="", theme_manager: ThemeManager|None=None) -> None:
         """INIT."""
         super().__init__()
-        self.__icons: str = "src/icons"
         self.__app_name: str = app_name
         self.__settings: str = "settings.json"
         AppConfig.set("theme", "dark")
@@ -150,35 +152,26 @@ class MainWindow(QMainWindow):
         self.__worker.start()
         self.__update_signal: ImportSignal = ImportSignal()
         self.__tray_icon: QSystemTrayIcon
-        self.__create_system_tray()
-        self.setMenuBar(MenuBar(self.__icons, self.__server_config, self.__update_signal,
-                                self.__export_current_configuration, self.__load_configuration,
-                                self.__theme_manager, self.__tray_icon))
-        self.__create_central_widget()
-        self.__connect_devices()
+        presets: list[str] = []
+        for _, _, files in os.walk(PathManager.PRESETS):
+            if not files:
+                continue
+            for file in files:
+                if ".json" in file.lower():
+                    presets.append(os.path.splitext(file)[0].title())
+        self.__create_system_tray(presets)
+        self.setMenuBar(MenuBar(self.__server_config, self.__export_current_configuration,
+                                self.__load_configuration, self.__theme_manager, self.__tray_icon))
+        self.__create_central_widget(presets)
         if AppConfig.get("start_minimized"):
             QTimer.singleShot(0, self.hide)
         else:
             self.show()
+        QTimer.singleShot(1_000, self.__connect_devices)
 
     def __create_icon(self, name: str) -> QIcon:
         """Create themed QIcon."""
-        return utils.create_icon(name, self.__icons, AppConfig.get("theme"))
-
-    def __create_system_tray(self) -> None:
-        """Create and setup system tray icon."""
-        self.__tray_icon = QSystemTrayIcon(self.__create_icon("icon"), self)
-        self.__tray_icon.setToolTip(self.__app_name)
-        self.__tray_icon.activated.connect(self.__on_tray_activated)
-        tray_menu: QMenu = QMenu()
-        self.__tray_icon.setContextMenu(tray_menu)
-        restore_action: QAction = QAction(self.__create_icon("restore"), "Restore", self)
-        quit_action: QAction = QAction(self.__create_icon("quit"), "Quit", self)
-        restore_action.triggered.connect(self.__restore_window)
-        quit_action.triggered.connect(self.__close)
-        tray_menu.addAction(restore_action)
-        tray_menu.addAction(quit_action)
-        self.__tray_icon.show()
+        return utils.create_icon(name, AppConfig.get("theme"))
 
     def __export_current_configuration(self, /, *, filename: str="",
                                              settings: bool=False) -> dict[str, Any]:
@@ -212,9 +205,18 @@ class MainWindow(QMainWindow):
                 json.dump(configuration, f, indent=4)
         return configuration
 
-    def __load_configuration(self, configuration: dict[str, Any]) -> None:
+    def __load_configuration(self, filename: str) -> None:
         """Load configuration."""
-        for device_id, fans in configuration.items():
+        configuration: dict[str, Any] = {}
+        message: str = "Current configuration successfully exported."
+        icon: QSystemTrayIcon.MessageIcon = QSystemTrayIcon.MessageIcon.Information
+        try:
+            with open(filename, "r") as f:
+                configuration = json.load(f)
+        except Exception as _:
+            message = f"Failed to import '{filename}' configuration.\nPlease choose valid file."
+            icon = QSystemTrayIcon.MessageIcon.Critical
+        for device_id, fans in configuration.get("devices", {}).items():
             configuration[device_id] = {}
             device_modes: dict[str, Any] = {}
             device_sources: dict[str, Any] = {}
@@ -223,15 +225,22 @@ class MainWindow(QMainWindow):
                 device_sources[fan_id] = fan_info["source"]
             self.__modes[device_id] = device_modes
             self.__sources[device_id] = device_sources
+        if filename != self.__settings:
+            self.__update_signal.update()
+            self.__tray_icon.showMessage("Import Configuration", message, icon, 3000)
+
+    def __load_preset(self, preset: str) -> None:
+        """Load selected preset."""
+        self.__load_configuration(os.path.join(PathManager.PRESETS, f"{preset.lower()}.json"))
 
     def __load_settings(self) -> None:
         """Load current settings."""
         if not os.path.exists(self.__settings):
             return
+        self.__load_configuration(self.__settings)
         settings: dict[str, Any] = {}
         with open(self.__settings, "r") as f:
             settings = json.load(f)
-        self.__load_configuration(settings.get("devices", {}))
         AppConfig.set("start_minimized", settings.get("start_minimized", False))
         AppConfig.set("minimize_on_exit", settings.get("minimize_on_exit", False))
         AppConfig.set("theme", settings.get("theme", "dark"))
@@ -277,23 +286,62 @@ class MainWindow(QMainWindow):
         self.__names["CPU"] = cpu
         self.__names["GPU"] = gpu
 
-    def __configure_layouts(self, central_widget: QWidget) -> None:
+    def __create_preset_action(self, preset_menu: QMenu, preset: str) -> None:
+        """Create preset QAction."""
+        action: QAction = QAction(preset, preset_menu)
+        action.triggered.connect(lambda _: self.__load_preset(preset))
+        preset_menu.addAction(action)
+
+    def __create_system_tray(self, presets: list[str]) -> None:
+        """Create and setup system tray icon."""
+        self.__tray_icon = QSystemTrayIcon(self.__create_icon("icon"), self)
+        self.__tray_icon.setToolTip(self.__app_name)
+        self.__tray_icon.activated.connect(self.__on_tray_activated)
+        tray_menu: QMenu = QMenu()
+        self.__tray_icon.setContextMenu(tray_menu)
+        restore_action: QAction = QAction(self.__create_icon("restore"), "Restore", self)
+        quit_action: QAction = QAction(self.__create_icon("exit"), "Exit", self)
+        restore_action.triggered.connect(self.__restore_window)
+        quit_action.triggered.connect(self.__close)
+        preset_menu: QMenu = QMenu("Presets", self)
+        preset_menu.setIcon(self.__create_icon("file"))
+        for preset in presets:
+            self.__create_preset_action(preset_menu, preset)
+        tray_menu.addMenu(preset_menu)
+        tray_menu.addSeparator()
+        tray_menu.addAction(restore_action)
+        tray_menu.addAction(quit_action)
+        self.__tray_icon.show()
+
+    def __create_preset_section(self, presets: list[str]) -> QHBoxLayout:
+        """Create preset section."""
+        preset_layout: QHBoxLayout = QHBoxLayout()
+        preset_box: QComboBox = QComboBox()
+        preset_box.addItems(presets)
+        preset_box.currentTextChanged.connect(lambda preset: self.__load_preset(preset))
+        preset_layout.addWidget(utils.create_label("Preset", size="medium"),
+                                alignment=Qt.AlignmentFlag.AlignRight)
+        preset_layout.addWidget(preset_box, alignment=Qt.AlignmentFlag.AlignLeft)
+        return preset_layout
+
+    def __configure_layouts(self, central_widget: QWidget, presets: list[str]) -> None:
         """Create and configure layouts."""
         main_layout: QVBoxLayout = QVBoxLayout()
         central_widget.setLayout(main_layout)
+        main_layout.addLayout(self.__create_preset_section(presets))
         main_layout.addLayout(TemperatureSection(self.__temps, self.__names, self.__temp_source))
         main_layout.addWidget(utils.create_separator(horizontal=True))
         main_layout.addLayout(DeviceSection(self.__devices, self.__modes, self.__sources,
                                             self.__temps, self.__update_signal, self.__min_temp,
                                             self.__server_config))
 
-    def __create_central_widget(self) -> None:
+    def __create_central_widget(self, presets: list[str]) -> None:
         """Create central widget."""
         central_widget: QWidget = QWidget()
         central_widget.setAutoFillBackground(True)
         central_widget.setProperty("id", "central")
         utils.force_refresh(central_widget)
-        self.__configure_layouts(central_widget)
+        self.__configure_layouts(central_widget, presets)
         self.setCentralWidget(central_widget)
 
     def __init_devices(self) -> list[Any]:
@@ -336,12 +384,10 @@ class MainWindow(QMainWindow):
         if event.type() == QEvent.Type.WindowStateChange\
             and self.windowState() & Qt.WindowState.WindowMinimized:
             QTimer.singleShot(0, self.hide)
-            self.__tray_icon.showMessage(
-                "Minimized to Tray",
-                "App is still running in the background.",
-                QSystemTrayIcon.MessageIcon.Information,
-                3000
-            )
+            self.__tray_icon.showMessage("Minimized to Tray",
+                                         "App is still running in the background.",
+                                         QSystemTrayIcon.MessageIcon.Information,
+                                         3000)
         super().changeEvent(event)
 
 def main() -> int:

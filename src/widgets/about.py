@@ -10,7 +10,7 @@ from src.widgets.config import AppConfig
 class AboutPopup(QDialog):
     """About Popup class."""
 
-    def __init__(self, icons: str, parent: QWidget|None=None) -> None:
+    def __init__(self, parent: QWidget|None=None) -> None:
         super().__init__(parent)
         if parent:
             self.setWindowIcon(parent.windowIcon())
@@ -19,12 +19,11 @@ class AboutPopup(QDialog):
         self.setModal(True)
         self.setFixedSize(400, 300)
         self.__git: str = "https://github.com/SergeyVasilyan/NZXT-RGB-and-FAN-control-app-with-PyQt6"
-        self.__icons: str = icons
         self.__construct_layout()
 
     def __create_icon(self, name: str) -> QIcon:
         """Create themed QIcon."""
-        return utils.create_icon(name, self.__icons, AppConfig.get("theme"))
+        return utils.create_icon(name, AppConfig.get("theme"))
 
     def __construct_icon(self, ) -> QLabel:
         """Construct Icon section."""

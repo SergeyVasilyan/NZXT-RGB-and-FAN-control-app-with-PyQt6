@@ -17,24 +17,21 @@ from src.widgets.theme_manager import ThemeManager
 class MenuBar(QMenuBar):
     """Menu Bar"""
 
-    def __init__(self, icons: str, server_config: ServerConfiguration,
-                       update_signal: ImportSignal, export_configuration: Callable,
+    def __init__(self, server_config: ServerConfiguration, export_configuration: Callable,
                        load_configuration: Callable, theme_manager: ThemeManager,
                        tray: QSystemTrayIcon) -> None:
         """INIT."""
         super().__init__()
-        self.__icons: str = icons
         self.__export: Callable = export_configuration
         self.__load: Callable = load_configuration
         self.__tray: QSystemTrayIcon = tray
-        self.__update_signal: ImportSignal = update_signal
         self.__create_file_menu()
         self.__create_settings_menu(server_config, theme_manager)
         self.__create_about()
 
     def __create_icon(self, name: str) -> QIcon:
         """Create themed QIcon."""
-        return utils.create_icon(name, self.__icons, AppConfig.get("theme"))
+        return utils.create_icon(name, AppConfig.get("theme"))
 
     def __on_export_triggered(self, _event: QEvent) -> None:
         """On Export action triggered."""
@@ -53,22 +50,11 @@ class MenuBar(QMenuBar):
 
     def __on_import_triggered(self, _event: QEvent) -> None:
         """On Import action triggered."""
-        configuration: dict[str, Any] = {}
         filename, _ = QFileDialog.getOpenFileName(self, "Select a Configuration", "",
                                                   "JSON (*.json)")
         if not filename:
             return
-        message: str = "Current configuration successfully exported."
-        icon: QSystemTrayIcon.MessageIcon = QSystemTrayIcon.MessageIcon.Information
-        try:
-            with open(filename, "r") as f:
-                configuration = json.load(f)
-        except Exception as _:
-            message = "Failed to import configuration.\nPlease choose valid file."
-            icon = QSystemTrayIcon.MessageIcon.Critical
-        self.__load(configuration.get("devices", {}))
-        self.__update_signal.update()
-        self.__tray.showMessage("Import Configuration", message, icon, 3000)
+        self.__load(filename)
 
     def __on_network_triggered(self, server_config: ServerConfiguration,
                                      theme_manager: ThemeManager) -> None:
@@ -94,7 +80,7 @@ class MenuBar(QMenuBar):
 
     def __on_about_triggered(self) -> None:
         """On Source Configuration triggered."""
-        dialog: AboutPopup = AboutPopup(self.__icons, self.parentWidget())
+        dialog: AboutPopup = AboutPopup(self.parentWidget())
         dialog.exec()
 
     def __create_about(self) -> None:

@@ -1,0 +1,47 @@
+{
+    "devices": {
+        "0": {
+            "fan1": {
+                "mode": "Aggressive",
+                "source": "MAX"
+            },
+            "fan2": {
+                "mode": "Aggressive",
+                "source": "MAX"
+            },
+            "fan3": {
+                "mode": "Aggressive",
+                "source": "MAX"
+            }
+        },
+        "1": {
+            "fan1": {
+                "mode": "Aggressive",
+                "source": "MAX"
+            },
+            "fan2": {
+                "mode": "Aggressive",
+                "source": "MAX"
+            },
+            "fan3": {
+                "mode": "Aggressive",
+                "source": "MAX"
+            }
+        },
+        "2": {
+            "fan1": {
+                "mode": "Aggressive",
+                "source": "MAX"
+            },
+            "fan2": {
+                "mode": "Aggressive",
+                "source": "MAX"
+            },
+            "fan3": {
+                "mode": "Aggressive",
+                "source": "MAX"
+            }
+        }
+    },
+    "date": "2025-08-30 20:12:28.781714"
+}
