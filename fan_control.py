@@ -164,6 +164,7 @@ class MainWindow(QMainWindow):
             for file in files:
                 if ".json" in file.lower():
                     presets.append(os.path.splitext(file)[0].title())
+        presets.append("Custom")
         self.__create_system_tray(presets)
         self.setMenuBar(MenuBar(self.__server_config, self.__export_current_configuration,
                                 self.__load_configuration, self.__theme_manager, self.__tray_icon))
@@ -323,6 +324,14 @@ class MainWindow(QMainWindow):
         preset_layout: QHBoxLayout = QHBoxLayout()
         preset_box: QComboBox = QComboBox()
         preset_box.addItems(presets)
+        modes: dict[str, Any] = self.__modes.get_data()
+        current_modes: list[str] = []
+        for fans in modes.values():
+            for mode in fans.values():
+                if mode not in current_modes:
+                    current_modes.append(mode)
+        current_preset: str = current_modes[0] if 1 == len(current_modes) else "Custom"
+        preset_box.setCurrentText(current_preset)
         preset_box.currentTextChanged.connect(lambda preset: self.__load_preset(preset))
         preset_layout.addWidget(utils.create_label("Preset", size="medium"),
                                 alignment=Qt.AlignmentFlag.AlignRight)
