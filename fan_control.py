@@ -6,6 +6,7 @@ import os
 import re
 import sys
 import time
+import socket
 from datetime import datetime
 from typing import Any
 
@@ -63,6 +64,10 @@ class Worker(QThread):
         self.__min_temp: float = min_temp
         self.__config: ServerConfiguration = config
         self.__temp_source: dict[str, str] = temp_source
+        s: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        self.__local_ip: str = s.getsockname()[0]
+        self.__config.ip = self.__local_ip
 
     def __get_temp(self) -> tuple[str, float, str, float]:
         """Get CPU Core Average and GPU temperature from LibreHardwareMonitor server."""

@@ -45,7 +45,6 @@ class SettingsDialog(QDialog):
         self.__config: ServerConfiguration = config
         self.__theme_manager: ThemeManager = theme_manager
         self.__export: Callable = export
-        self.__ip_input: QLineEdit
         self.__port_input: QLineEdit
         self.__rate_spin_box: QDoubleSpinBox
         self.__start_minimized: QCheckBox
@@ -60,14 +59,9 @@ class SettingsDialog(QDialog):
     def __create_ip_section(self, layout: QGridLayout, row: int) -> int:
         """Create IP section."""
         self.__create_label(layout, "IP Address", row)
-        self.__ip_input = QLineEdit()
+        self.__ip_input: QLineEdit = QLineEdit()
+        self.__ip_input.setReadOnly(True)
         self.__ip_input.setText(self.__config.ip)
-        self.__ip_input.setPlaceholderText("Enter IP address")
-        ip_regex: QRegularExpression = QRegularExpression(
-            r"^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)"
-            r"(\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)){3}$"
-        )
-        self.__ip_input.setValidator(QRegularExpressionValidator(ip_regex))
         layout.addWidget(self.__ip_input, row, 1, 1, 2)
         return row + 1
 
@@ -121,11 +115,7 @@ class SettingsDialog(QDialog):
 
     def __validate_inputs(self) -> None:
         """Validate IP and PORT."""
-        ip_text: str = self.__ip_input.text()
         port_text: int = int(self.__port_input.text())
-        if not self.__ip_input.hasAcceptableInput():
-            QMessageBox.warning(self, "Invalid IP", "Please enter a valid IPv4 address.")
-            return
         try:
             port: int = port_text
             if not 1 <= port <= 65535:
@@ -134,7 +124,6 @@ class SettingsDialog(QDialog):
             QMessageBox.warning(self, "Invalid Port", "Port must be an integer between 1 and 65535.")
             return
         rate: float = round(self.__rate_spin_box.value(), 2)
-        self.__config.ip = ip_text
         self.__config.port = port_text
         self.__config.rate = rate
         AppConfig.set("start_minimized", self.__start_minimized.isChecked())
