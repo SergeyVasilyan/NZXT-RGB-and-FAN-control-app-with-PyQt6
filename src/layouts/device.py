@@ -161,24 +161,27 @@ class DeviceSection(QHBoxLayout):
                                     channel: str) -> None:
         """Change Source box state."""
         channel_mode: str = self.__get_channel_mode(self.__modes, device_id, channel)
-        if not channel_mode:
+        if not channel_mode or "Custom" ==  channel_mode:
             return
-        if "Custom" != channel_mode:
-            device_sources: dict[str, Any] = self.__sources[device_id]
-            if not device_sources:
-                return
-            source: str = device_sources.get(channel, "")
-            if not source:
-                return
-            temp: int = max(self.__min_temp, min(int(temps[source]), 90))
-            speed: int = min(100, self.__min_temp + ((temp - 20) / 70) ** 1.0 * 70)
-            if "Aggressive" == channel_mode:
-                speed = min(100, self.__min_temp + ((temp - 20) / 70) ** 0.5 * 70)
-            elif "Silent" == channel_mode:
-                speed = min(100, self.__min_temp + ((temp - 20) / 70) ** 1.5 * 70)
-            speed = int(min(speed, 100))
-            slider.setValue(speed)
-            self.__update_slider_style(slider, speed)
+        device_sources: dict[str, Any] = self.__sources[device_id]
+        if not device_sources:
+            return
+        source: str = device_sources.get(channel, "")
+        if not source:
+            return
+        max_temp: int = 90
+        noise: int = 20
+        power: float = 1.0
+        temp: int = max(self.__min_temp, min(int(temps[source]), max_temp))
+        if "Aggressive" == channel_mode:
+            noise = 10
+            power = 0.5
+        elif "Silent" == channel_mode:
+            power = 1.5
+        difference: int = max_temp - noise
+        speed: int = self.__min_temp + ((temp - noise) / difference) ** power * difference
+        slider.setValue(int(min(100, speed)))
+        self.__update_slider_style(slider, speed)
 
     def __create_fan_slider(self, device_id: str, channel: str) -> QSlider:
         """Create FAN slider."""
@@ -199,7 +202,7 @@ class DeviceSection(QHBoxLayout):
         self.__update_slider_style(fan_slider, 30)
         return fan_slider
 
-        
+
     def __create_fan_settings(self, device_id: str, channel: str) -> QGridLayout:
         """Create fan settings layout."""
         fan_settings: QGridLayout = QGridLayout()
