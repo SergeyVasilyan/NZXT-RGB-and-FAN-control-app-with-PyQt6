@@ -8,7 +8,7 @@ import sys
 import time
 import socket
 from datetime import datetime
-from typing import Any
+from typing import Any, override
 
 import requests
 import src.utils.common as utils
@@ -27,7 +27,6 @@ from PyQt6.QtGui import (
     QCloseEvent,
     QGuiApplication,
     QIcon,
-    QWindowStateChangeEvent,
 )
 from PyQt6.QtWidgets import (
     QApplication,
@@ -379,9 +378,11 @@ class MainWindow(QMainWindow):
         except Exception:
             return False
 
-    def closeEvent(self, event: QCloseEvent):
+    @override
+    def closeEvent(self, a0: QCloseEvent|None) -> None:
         """Override the close event to handle application minimize to system tray."""
-        event.ignore()
+        if a0:
+            a0.ignore()
         if not AppConfig.get("minimize_on_exit"):
             self.__close()
             return
@@ -393,16 +394,17 @@ class MainWindow(QMainWindow):
             3000
         )
 
-    def changeEvent(self, event: QWindowStateChangeEvent):
+    @override
+    def changeEvent(self, a0: QEvent|None) -> None:
         """Override the change event to handle application minimize to system tray."""
-        if event.type() == QEvent.Type.WindowStateChange\
+        if a0 and a0.type() == QEvent.Type.WindowStateChange\
             and self.windowState() & Qt.WindowState.WindowMinimized:
             QTimer.singleShot(0, self.hide)
             self.__tray_icon.showMessage("Minimized to Tray",
                                          "App is still running in the background.",
                                          QSystemTrayIcon.MessageIcon.Information,
                                          3000)
-        super().changeEvent(event)
+        super().changeEvent(a0)
 
 def main() -> int:
     """Start point."""

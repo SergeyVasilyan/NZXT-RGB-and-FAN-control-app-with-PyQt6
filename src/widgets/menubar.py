@@ -1,13 +1,11 @@
 """MenuBar of app."""
 
-import json
-from typing import Any, Callable
+from typing import Callable
 
 import src.utils.common as utils
 from PyQt6.QtCore import QEvent
 from PyQt6.QtGui import QAction, QIcon
 from PyQt6.QtWidgets import QFileDialog, QMenu, QMenuBar, QSystemTrayIcon
-from src.utils.common import ImportSignal
 from src.widgets.about import AboutPopup
 from src.widgets.config import AppConfig
 from src.widgets.settings_dialog import ServerConfiguration, SettingsDialog
