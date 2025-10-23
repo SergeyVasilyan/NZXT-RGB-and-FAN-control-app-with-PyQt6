@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from PyQt6.QtCore import QSettings
+from PySide6.QtCore import QSettings
 
 
 class AppConfig:

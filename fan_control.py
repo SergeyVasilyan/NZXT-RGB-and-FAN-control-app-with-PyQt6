@@ -13,22 +13,22 @@ from typing import Any, override
 import requests
 import src.utils.common as utils
 from liquidctl import find_liquidctl_devices
-from PyQt6.QtCore import (
+from PySide6.QtCore import (
     QEvent,
     QRect,
     QSize,
     Qt,
     QThread,
     QTimer,
-    pyqtSignal,
+    Signal,
 )
-from PyQt6.QtGui import (
+from PySide6.QtGui import (
     QAction,
     QCloseEvent,
     QGuiApplication,
     QIcon,
 )
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QHBoxLayout,
@@ -53,8 +53,8 @@ from src.widgets.theme_manager import ThemeManager
 
 class Worker(QThread):
     """Worker thread that poll sensors temperature from the server at given rate."""
-    temps: pyqtSignal = pyqtSignal(float, float)
-    names: pyqtSignal = pyqtSignal(str, str)
+    temps: Signal = Signal(float, float)
+    names: Signal = Signal(str, str)
 
     def __init__(self, config: ServerConfiguration, temp_source: dict[str, str],
                        min_temp: float=30.) -> None:

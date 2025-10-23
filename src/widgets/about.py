@@ -1,9 +1,9 @@
 """About Popup."""
 
 import src.utils.common as utils
-from PyQt6.QtWidgets import QWidget, QDialog, QLabel, QVBoxLayout, QHBoxLayout, QPushButton
-from PyQt6.QtGui import QDesktopServices, QIcon
-from PyQt6.QtCore import QUrl, Qt
+from PySide6.QtWidgets import QWidget, QDialog, QLabel, QVBoxLayout, QHBoxLayout, QPushButton
+from PySide6.QtGui import QDesktopServices, QIcon
+from PySide6.QtCore import QUrl, Qt
 from src.widgets.config import AppConfig
 
 

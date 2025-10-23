@@ -2,9 +2,9 @@
 
 from enum import StrEnum
 import os
-from PyQt6.QtCore import QObject, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
+from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -24,7 +24,7 @@ class PathManager(StrEnum):
 
 class ImportSignal(QObject):
     """Simple import update signal."""
-    imported: pyqtSignal = pyqtSignal()
+    imported: Signal = Signal()
 
     def __init__(self) -> None:
         """INIT."""

@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from typing import Callable
 
 import src.utils.common as utils
-from PyQt6.QtCore import QRegularExpression, Qt
-from PyQt6.QtGui import QRegularExpressionValidator
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QRegularExpression, Qt
+from PySide6.QtGui import QRegularExpressionValidator
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,

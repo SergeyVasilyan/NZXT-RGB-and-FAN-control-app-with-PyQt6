@@ -2,12 +2,12 @@
 
 from typing import Any
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 
 class ObservableDict(QObject):
     """Custom Dict with onChange signal."""
-    value_changed: pyqtSignal = pyqtSignal(dict)
+    value_changed: Signal = Signal(dict)
 
     def __init__(self, initial: dict|None=None):
         """INIT."""

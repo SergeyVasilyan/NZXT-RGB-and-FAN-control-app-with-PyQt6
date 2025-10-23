@@ -4,8 +4,8 @@ import time
 from typing import Any
 
 import src.utils.common as utils
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtWidgets import QComboBox, QGridLayout, QHBoxLayout, QLabel, QSlider, QVBoxLayout
+from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtWidgets import QComboBox, QGridLayout, QHBoxLayout, QLabel, QSlider, QVBoxLayout
 from src.utils.common import ImportSignal
 from src.utils.observable_dict import ObservableDict
 from src.widgets.settings_dialog import ServerConfiguration
@@ -13,7 +13,7 @@ from src.widgets.settings_dialog import ServerConfiguration
 
 class Worker(QThread):
     """Worker thread that poll fans rpm at given rate."""
-    rpms: pyqtSignal = pyqtSignal(dict)
+    rpms: Signal = Signal(dict)
 
     def __init__(self, devices: list[Any], server_config: ServerConfiguration) -> None:
         """INIT."""

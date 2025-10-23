@@ -1,2 +1,2 @@
-pyqt6
+pyside6
 liquidctl

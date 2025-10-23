@@ -1,8 +1,8 @@
 """Temperature Section."""
 
 import src.utils.common as utils
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QVBoxLayout
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QVBoxLayout
 from src.utils.observable_dict import ObservableDict
 
 

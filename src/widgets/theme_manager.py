@@ -1,7 +1,7 @@
 """Theme manager."""
 
 import os
-from PyQt6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 
 
 class ThemeManager:
