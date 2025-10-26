@@ -1,5 +1,6 @@
 """Device section of the app."""
 
+import time
 from typing import Any, override
 
 import src.utils.common as utils
@@ -105,6 +106,7 @@ class DeviceSection(QHBoxLayout):
         except ValueError:
             print(f"ERROR: Failed to set fan speed for {device_id=} {channel=}")
         self.__update_slider_style(fan_slider, value)
+        time.sleep(0.1)
 
     def __update_fan_rpm(self, device_id: str, channel: str, rpm_label: QLabel) -> None:
         """Update fan rpm report."""
@@ -148,6 +150,29 @@ class DeviceSection(QHBoxLayout):
             return ""
         return device_modes.get(channel, "")
 
+    def __calculate_fan_speed(self, device_id: str, channel: str, temps: dict[str, Any]) -> int:
+        """Calcualte fan speed."""
+        channel_mode: str = self.__get_channel_mode(self.__modes, device_id, channel)
+        if not channel_mode or "Custom" == channel_mode:
+            return self.__min_temp
+        device_sources: dict[str, Any] = self.__sources[device_id]
+        if not device_sources:
+            return self.__min_temp
+        source: str = device_sources.get(channel, "")
+        if not source:
+            return self.__min_temp
+        max_temp: int = 80
+        noise: int = 20
+        power: float = 1.0
+        temp: int = max(self.__min_temp, min(int(temps[source]), max_temp))
+        if "Aggressive" == channel_mode:
+            noise = 10
+            power = 0.5
+        elif "Silent" == channel_mode:
+            power = 1.5
+        difference: int = max_temp - noise
+        return self.__min_temp + ((temp - noise) / difference) ** power * difference
+
     def __change_slider_state(self, new_modes: dict[str, Any], slider: QSlider, device_id: str,
                                     channel: str) -> None:
         """Change Source box state."""
@@ -160,26 +185,7 @@ class DeviceSection(QHBoxLayout):
     def __change_slider_value(self, temps: dict[str, Any], slider: QSlider, device_id: str,
                                     channel: str) -> None:
         """Change Source box state."""
-        channel_mode: str = self.__get_channel_mode(self.__modes, device_id, channel)
-        if not channel_mode or "Custom" ==  channel_mode:
-            return
-        device_sources: dict[str, Any] = self.__sources[device_id]
-        if not device_sources:
-            return
-        source: str = device_sources.get(channel, "")
-        if not source:
-            return
-        max_temp: int = 90
-        noise: int = 20
-        power: float = 1.0
-        temp: int = max(self.__min_temp, min(int(temps[source]), max_temp))
-        if "Aggressive" == channel_mode:
-            noise = 10
-            power = 0.5
-        elif "Silent" == channel_mode:
-            power = 1.5
-        difference: int = max_temp - noise
-        speed: int = self.__min_temp + ((temp - noise) / difference) ** power * difference
+        speed: int = self.__calculate_fan_speed(device_id, channel, temps)
         slider.setValue(int(min(100, speed)))
         self.__update_slider_style(slider, speed)
 
