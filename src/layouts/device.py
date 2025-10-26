@@ -1,13 +1,13 @@
 """Device section of the app."""
 
-import time
 from typing import Any, override
 
 import src.utils.common as utils
 from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtWidgets import QComboBox, QGridLayout, QHBoxLayout, QLabel, QSlider, QVBoxLayout
+from PySide6.QtWidgets import QComboBox, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout
 from src.utils.common import ImportSignal
 from src.utils.observable_dict import ObservableDict
+from src.widgets.fan_slider import FanSlider
 from src.widgets.settings_dialog import ServerConfiguration
 
 
@@ -53,20 +53,17 @@ class DeviceSection(QHBoxLayout):
                        server_config: ServerConfiguration) -> None:
         """INIT."""
         super().__init__()
+        self.__min_temp: int = min_temp
         self.__devices: list[Any] = devices
         self.__modes: ObservableDict = modes
         self.__sources: ObservableDict = sources
         self.__temps: ObservableDict = temps
         self.__update_signal: ImportSignal = update_signal
         self.__rpms: ObservableDict = ObservableDict()
+        self.__construct_layout()
         self.__worker: Worker = Worker(self.__devices, server_config)
         self.__worker.rpms.connect(self.__update_rpms)
         self.__worker.start()
-        self.__min_temp: int = min_temp
-        for device_id, device in enumerate(self.__devices):
-            self.addLayout(self.__create_device_layout(device, str(device_id)))
-            if device != self.__devices[-1]:
-                self.addWidget(utils.create_separator())
 
     def __update_rpms(self, rpms: dict[str, Any]) -> None:
         """Update RPM values."""
@@ -75,38 +72,6 @@ class DeviceSection(QHBoxLayout):
             for channel, value in info.items():
                 fans[channel] = value
             self.__rpms.update(device_id, fans)
-
-    def __update_slider_style(self, slider: QSlider, value: int) -> None:
-        """Update given QSlider style."""
-        is_enabled: bool = slider.isEnabled()
-        cursor: Qt.CursorShape = Qt.CursorShape.ClosedHandCursor
-        if not is_enabled:
-            cursor = Qt.CursorShape.ForbiddenCursor
-        slider.setCursor(cursor)
-        lightness: int = 50 if is_enabled else 30
-        slider.setStyleSheet(f"""
-            QSlider::handle:vertical {{
-                background: hsl(200, 100%, {lightness}%);
-                border: none;
-                border-radius: 10px;
-                margin: 0 -6px;
-                height: 20px;
-                width: 20px;
-            }}
-            QSlider::add-page:vertical {{
-                background-color: hsl({100 - value}, 100%, {lightness}%);
-            }}
-        """)
-
-    def __update_fan_speed(self, device_id: str, channel: str, value: int,
-                                 fan_slider: QSlider) -> None:
-        """Set Fan speed to corresponding value."""
-        try:
-            self.__devices[int(device_id)].set_fixed_speed(channel, value)
-        except ValueError:
-            print(f"ERROR: Failed to set fan speed for {device_id=} {channel=}")
-        self.__update_slider_style(fan_slider, value)
-        time.sleep(0.1)
 
     def __update_fan_rpm(self, device_id: str, channel: str, rpm_label: QLabel) -> None:
         """Update fan rpm report."""
@@ -173,30 +138,23 @@ class DeviceSection(QHBoxLayout):
         difference: int = max_temp - noise
         return self.__min_temp + ((temp - noise) / difference) ** power * difference
 
-    def __change_slider_state(self, new_modes: dict[str, Any], slider: QSlider, device_id: str,
+    def __change_slider_state(self, new_modes: dict[str, Any], slider: FanSlider, device_id: str,
                                     channel: str) -> None:
         """Change Source box state."""
         channel_mode: str = self.__get_channel_mode(new_modes, device_id, channel)
         if not channel_mode:
             return
         slider.setEnabled("Custom" == channel_mode)
-        self.__update_slider_style(slider, slider.value())
 
-    def __change_slider_value(self, temps: dict[str, Any], slider: QSlider, device_id: str,
+    def __change_slider_value(self, temps: dict[str, Any], slider: FanSlider, device_id: str,
                                     channel: str) -> None:
         """Change Source box state."""
         speed: int = self.__calculate_fan_speed(device_id, channel, temps)
         slider.setValue(int(min(100, speed)))
-        self.__update_slider_style(slider, speed)
 
-    def __create_fan_slider(self, device_id: str, channel: str) -> QSlider:
+    def __create_fan_slider(self, device_id: str, channel: str) -> FanSlider:
         """Create FAN slider."""
-        fan_slider: QSlider = QSlider(Qt.Orientation.Vertical)
-        fan_slider.setMinimum(0)
-        fan_slider.setValue(30)
-        fan_slider.setMaximum(100)
-        fan_slider.valueChanged.connect(lambda value: self.__update_fan_speed(device_id, channel,
-                                                                              value, fan_slider))
+        fan_slider: FanSlider = FanSlider(self.__devices[int(device_id)], channel)
         self.__modes.value_changed.connect(lambda modes: self.__change_slider_state(modes,
                                                                                     fan_slider,
                                                                                     device_id,
@@ -205,9 +163,7 @@ class DeviceSection(QHBoxLayout):
                                                                                     fan_slider,
                                                                                     device_id,
                                                                                     channel))
-        self.__update_slider_style(fan_slider, 30)
         return fan_slider
-
 
     def __create_fan_settings(self, device_id: str, channel: str) -> QGridLayout:
         """Create fan settings layout."""
@@ -256,7 +212,7 @@ class DeviceSection(QHBoxLayout):
         header_layout.addWidget(rpm_label, alignment=Qt.AlignmentFlag.AlignRight)
         slider_layout: QHBoxLayout = QHBoxLayout()
         slider_layout.addLayout(utils.create_ruler())
-        fan_slider: QSlider = self.__create_fan_slider(device_id, channel)
+        fan_slider: FanSlider = self.__create_fan_slider(device_id, channel)
         slider_layout.addWidget(fan_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
         slider_layout.addLayout(utils.create_ruler(left=False))
         fan_layout.addLayout(header_layout)
@@ -266,14 +222,21 @@ class DeviceSection(QHBoxLayout):
 
     def __create_device_layout(self, device: Any, device_id: str) -> QVBoxLayout:
         """Create Device Layout."""
-        device_layout: QVBoxLayout = QVBoxLayout()
-        name_label: QLabel = utils.create_label(device.description, target="device")
-        device_layout.addWidget(name_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout: QVBoxLayout = QVBoxLayout()
+        name: QLabel = utils.create_label(device.description, target="device")
+        layout.addWidget(name, alignment=Qt.AlignmentFlag.AlignCenter)
         fans_layout: QHBoxLayout = QHBoxLayout()
         channels: list[str] = list(device._speed_channels.keys())
         for channel in channels:
             fans_layout.addLayout(self.__create_fan_layout(device_id, channel))
             if channel != channels[-1]:
                 fans_layout.addWidget(utils.create_separator())
-        device_layout.addLayout(fans_layout)
-        return device_layout
+        layout.addLayout(fans_layout)
+        return layout
+
+    def __construct_layout(self) -> None:
+        """Construct layout."""
+        for device_id, device in enumerate(self.__devices):
+            self.addLayout(self.__create_device_layout(device, str(device_id)))
+            if device != self.__devices[-1]:
+                self.addWidget(utils.create_separator())
