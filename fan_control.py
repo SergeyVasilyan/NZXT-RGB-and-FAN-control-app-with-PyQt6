@@ -297,7 +297,8 @@ class MainWindow(QMainWindow):
         self.activateWindow()
 
     def __on_tray_activated(self, reason: QEvent):
-        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+        if reason in [QSystemTrayIcon.ActivationReason.DoubleClick,
+                      QSystemTrayIcon.ActivationReason.Trigger]:
             self.__restore_window()
 
     def __update_device_info(self, cpu: DeviceInfo, gpu: DeviceInfo) -> None:
