@@ -27,7 +27,7 @@ class ServerConfiguration:
 
     ip: str = "0.0.0.0"
     port: int = 8085
-    rate: float = 1.0
+    rate: int = 1 * 1_000
 
 class SettingsDialog(QDialog):
     """Simple Settings selection Dialog."""
@@ -41,7 +41,6 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("Settings")
         self.setFixedSize(300, 250)
         self.setModal(True)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowMaximizeButtonHint)
         self.__config: ServerConfiguration = config
         self.__theme_manager: ThemeManager = theme_manager
         self.__export: Callable = export
@@ -85,7 +84,7 @@ class SettingsDialog(QDialog):
         self.__rate_spin_box = QDoubleSpinBox()
         self.__rate_spin_box.setRange(0.1, 10.0)
         self.__rate_spin_box.setSingleStep(0.1)
-        self.__rate_spin_box.setValue(self.__config.rate)
+        self.__rate_spin_box.setValue(self.__config.rate / 1_000)
         layout.addWidget(self.__rate_spin_box, row, 1, 1 ,2)
         return row + 1
 
@@ -125,7 +124,7 @@ class SettingsDialog(QDialog):
             return
         rate: float = round(self.__rate_spin_box.value(), 2)
         self.__config.port = port_text
-        self.__config.rate = rate
+        self.__config.rate = rate * 1_000
         AppConfig.set("start_minimized", self.__start_minimized.isChecked())
         AppConfig.set("minimize_on_exit", self.__minimize_on_exit.isChecked())
         previous_theme: str = AppConfig.get("theme")

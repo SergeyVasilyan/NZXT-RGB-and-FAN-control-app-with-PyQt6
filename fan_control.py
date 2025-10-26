@@ -7,6 +7,7 @@ import re
 import sys
 import time
 import socket
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, override
 
@@ -51,6 +52,15 @@ from src.widgets.settings_dialog import ServerConfiguration
 from src.widgets.theme_manager import ThemeManager
 
 
+@dataclass
+class DeviceInfo:
+    """Device information class."""
+
+    name: str
+    pattern: str
+    temp: float
+    model: str = "N/A"
+
 class Worker(QThread):
     """Worker thread that poll sensors temperature from the server at given rate."""
     temps: Signal = Signal(float, float)
@@ -60,6 +70,7 @@ class Worker(QThread):
                        min_temp: float=30.) -> None:
         """INIT."""
         super().__init__()
+        self.__run: bool = True
         self.__min_temp: float = min_temp
         self.__config: ServerConfiguration = config
         self.__temp_source: dict[str, str] = temp_source
@@ -67,56 +78,66 @@ class Worker(QThread):
         s.connect(("8.8.8.8", 80))
         self.__local_ip: str = s.getsockname()[0]
         self.__config.ip = self.__local_ip
+        self.__cpu: DeviceInfo = DeviceInfo(name="CPU", temp=self.__min_temp, pattern="(Intel|AMD)")
+        self.__gpu: DeviceInfo = DeviceInfo(name="GPU", temp=self.__min_temp, pattern="(NVIDIA)")
 
-    def __get_temp(self) -> tuple[str, float, str, float]:
-        """Get CPU Core Average and GPU temperature from LibreHardwareMonitor server."""
-        cpu_name: str = "N/A"
-        gpu_name: str = "N/A"
-        cpu_temp: float = self.__min_temp
-        gpu_temp: float = self.__min_temp
+    def __get_info_from_server(self) -> dict[str, Any]:
+        """Get sensors information from the server."""
         response: requests.Response|None = None
-        for _ in range(0, 3):
+        for _ in range(3):
             try:
                 response = requests.get(f"http://{self.__config.ip}:{self.__config.port}/data.json")
             except requests.exceptions.ConnectionError:
-                time.sleep(1)
+                self.sleep(1)
         if response and response.ok:
-            data: dict[str, Any] = response.json()
-            is_cpu_set: bool = False
-            is_gpu_set: bool = False
-            for hw in data.get("Children", [{}])[0].get("Children", []):
-                if is_cpu_set and is_gpu_set:
-                    break
-                if not is_cpu_set and re.search("(Intel|AMD)", hw["Text"]):
-                    for sensor in hw["Children"]:
-                        if "Temperatures" in sensor["Text"]:
-                            for temp_sensor in sensor["Children"]:
-                                if self.__temp_source["CPU"] in temp_sensor["Text"]:
-                                    cpu_name = hw["Text"]
-                                    cpu_temp = float(temp_sensor["Value"].replace(" °C", ""))
-                                    is_cpu_set = True
-                if not is_gpu_set and re.search("(NVIDIA)", hw["Text"]):
-                    for sensor in hw["Children"]:
-                        if "Temperatures" in sensor["Text"]:
-                            for temp_sensor in sensor["Children"]:
-                                if self.__temp_source["GPU"] in temp_sensor["Text"]:
-                                    gpu_name = hw["Text"]
-                                    gpu_temp = float(temp_sensor["Value"].replace(" °C", ""))
-                                    is_gpu_set = True
-        return cpu_name, cpu_temp, gpu_name, gpu_temp
+            return response.json()
+        return {}
 
+    def __parse_info(self, hardware: dict[str, Any], is_cpu: bool=True) -> bool:
+        """Parse sensor information."""
+        device: DeviceInfo = self.__cpu if is_cpu else self.__gpu
+        if re.search(device.pattern, hardware["Text"]):
+            for sensor in hardware["Children"]:
+                if "Temperatures" in sensor["Text"]:
+                    for temp_sensor in sensor["Children"]:
+                        if self.__temp_source[device.name] in temp_sensor["Text"]:
+                            device.model = hardware["Text"]
+                            device.temp = float(temp_sensor["Value"].replace(" °C", ""))
+                            return True
+        return False
+
+    def __update_temp(self) -> None:
+        """Get CPU Core Average and GPU temperature from LibreHardwareMonitor server."""
+        is_cpu_set: bool = False
+        is_gpu_set: bool = False
+        data: dict[str, Any] = self.__get_info_from_server()
+        for hw in data.get("Children", [{}])[0].get("Children", []):
+            if is_cpu_set and is_gpu_set:
+                break
+            if not is_cpu_set:
+                is_cpu_set = self.__parse_info(hw)
+            if not is_gpu_set:
+                is_gpu_set = self.__parse_info(hw, is_cpu=False)
+
+    @override
+    def quit(self) -> None:
+        """Override quit slot."""
+        self.__run = False
+        self.exit(0)
+
+    @override
     def run(self):
         """Get CPU Core Average and GPU temperature from LibreHardwareMonitor server."""
-        while True:
-            cpu_name, cpu_temp, gpu_name, gpu_temp = self.__get_temp()
-            self.temps.emit(cpu_temp, gpu_temp)
-            self.names.emit(cpu_name, gpu_name)
-            time.sleep(self.__config.rate)
+        while self.__run:
+            self.__update_temp()
+            self.temps.emit(self.__cpu.temp, self.__gpu.temp)
+            self.names.emit(self.__cpu.model, self.__gpu.model)
+            self.msleep(self.__config.rate)
 
 class MainWindow(QMainWindow):
     """Main Window."""
 
-    def __init__(self, app_name: str="", theme_manager: ThemeManager|None=None) -> None:
+    def __init__(self, app_name: str, theme_manager: ThemeManager) -> None:
         """INIT."""
         super().__init__()
         self.__app_name: str = app_name
@@ -268,6 +289,9 @@ class MainWindow(QMainWindow):
             for device in self.__devices:
                 device.disconnect()
             self.__export_current_configuration(settings=True)
+            self.__worker.quit()
+            while self.__worker.isRunning():
+                time.sleep(1)
             QApplication.quit()
 
     def __restore_window(self) -> None:
@@ -395,16 +419,16 @@ class MainWindow(QMainWindow):
         )
 
     @override
-    def changeEvent(self, a0: QEvent|None) -> None:
+    def changeEvent(self, event: QEvent) -> None:
         """Override the change event to handle application minimize to system tray."""
-        if a0 and a0.type() == QEvent.Type.WindowStateChange\
+        if event and event.type() == QEvent.Type.WindowStateChange\
             and self.windowState() & Qt.WindowState.WindowMinimized:
             QTimer.singleShot(0, self.hide)
             self.__tray_icon.showMessage("Minimized to Tray",
                                          "App is still running in the background.",
                                          QSystemTrayIcon.MessageIcon.Information,
                                          3000)
-        super().changeEvent(a0)
+        super().changeEvent(event)
 
 def main() -> int:
     """Start point."""
