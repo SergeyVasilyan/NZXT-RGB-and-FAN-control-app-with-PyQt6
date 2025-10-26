@@ -63,8 +63,7 @@ class DeviceInfo:
 
 class Worker(QThread):
     """Worker thread that poll sensors temperature from the server at given rate."""
-    temps: Signal = Signal(float, float)
-    names: Signal = Signal(str, str)
+    new_info: Signal = Signal(DeviceInfo, DeviceInfo)
 
     def __init__(self, config: ServerConfiguration, temp_source: dict[str, str],
                        min_temp: float=30.) -> None:
@@ -130,8 +129,7 @@ class Worker(QThread):
         """Get CPU Core Average and GPU temperature from LibreHardwareMonitor server."""
         while self.__run:
             self.__update_temp()
-            self.temps.emit(self.__cpu.temp, self.__gpu.temp)
-            self.names.emit(self.__cpu.model, self.__gpu.model)
+            self.new_info.emit(self.__cpu, self.__gpu)
             self.msleep(self.__config.rate)
 
 class MainWindow(QMainWindow):
@@ -172,8 +170,7 @@ class MainWindow(QMainWindow):
         self.__load_settings()
         self.__theme_manager.apply_theme(AppConfig.get("theme"))
         self.__worker: Worker = Worker(self.__server_config, self.__temp_source, self.__min_temp)
-        self.__worker.temps.connect(self.__update_temps)
-        self.__worker.names.connect(self.__update_names)
+        self.__worker.new_info.connect(self.__update_device_info)
         self.__worker.start()
         self.__update_signal: ImportSignal = ImportSignal()
         self.__tray_icon: QSystemTrayIcon
@@ -303,17 +300,16 @@ class MainWindow(QMainWindow):
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
             self.__restore_window()
 
-    def __update_temps(self, cpu: float, gpu: float) -> None:
-        """Update CPU and GPU temperatures."""
-        self.__temps["CPU"] = cpu
-        self.__temps["GPU"] = gpu
-        self.__temps["AVG"] = (cpu + gpu) / 2
-        self.__temps["MAX"] = max(cpu, gpu)
-
-    def __update_names(self, cpu: str, gpu: str) -> None:
-        """Update CPU and GPU temperatures."""
-        self.__names["CPU"] = cpu
-        self.__names["GPU"] = gpu
+    def __update_device_info(self, cpu: DeviceInfo, gpu: DeviceInfo) -> None:
+        """Update device information."""
+        cpu_temp: float = cpu.temp
+        gpu_temp: float = gpu.temp
+        self.__temps["CPU"] = cpu_temp
+        self.__temps["GPU"] = gpu_temp
+        self.__temps["AVG"] = (cpu_temp + gpu_temp) / 2
+        self.__temps["MAX"] = max(cpu_temp, gpu_temp)
+        self.__names["CPU"] = cpu.model
+        self.__names["GPU"] = gpu.model
 
     def __create_preset_action(self, preset_menu: QMenu, preset: str) -> None:
         """Create preset QAction."""

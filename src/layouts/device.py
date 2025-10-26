@@ -1,7 +1,6 @@
 """Device section of the app."""
 
-import time
-from typing import Any
+from typing import Any, override
 
 import src.utils.common as utils
 from PySide6.QtCore import Qt, QThread, Signal
@@ -38,11 +37,12 @@ class Worker(QThread):
                     rpms[device_id][name] = report[1]
         return rpms
 
+    @override
     def run(self):
         """Run the worker."""
         while True:
             self.rpms.emit(self.__get_rpms())
-            time.sleep(self.__config.rate)
+            self.msleep(self.__config.rate)
 
 class DeviceSection(QHBoxLayout):
     """Device section."""
