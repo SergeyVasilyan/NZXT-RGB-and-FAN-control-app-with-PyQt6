@@ -15,9 +15,12 @@ class Worker(QThread):
     """Worker thread that poll fans rpm at given rate."""
     rpms: Signal = Signal(dict)
 
-    def __init__(self, devices: list[Any], server_config: ServerConfiguration) -> None:
+    def __init__(self, devices: list[Any], sliders: dict[str, dict[str, FanSlider]],
+                       server_config: ServerConfiguration) -> None:
         """INIT."""
         super().__init__()
+        self.__sliders: dict[str, dict[str, FanSlider]] = sliders
+        self.__number_of_sliders: int = sum(len(v) for v in sliders.values())
         self.__devices: list[Any] = devices
         self.__config: ServerConfiguration = server_config
 
@@ -38,12 +41,23 @@ class Worker(QThread):
                     rpms[device_id][name] = report[1]
         return rpms
 
+    def __update_fans_speed(self) -> None:
+        """Update fan speed."""
+        for device_id, channels in self.__sliders.items():
+            device: Any = self.__devices[int(device_id)]
+            for channel, slider in channels.items():
+                try:
+                    device.set_fixed_speed(channel, slider.value())
+                    self.msleep(self.__config.rate // self.__number_of_sliders)
+                except ValueError:
+                    ...
+
     @override
-    def run(self):
+    def run(self) -> None:
         """Run the worker."""
         while True:
             self.rpms.emit(self.__get_rpms())
-            self.msleep(self.__config.rate)
+            self.__update_fans_speed()
 
 class DeviceSection(QHBoxLayout):
     """Device section."""
@@ -54,6 +68,7 @@ class DeviceSection(QHBoxLayout):
         """INIT."""
         super().__init__()
         self.__min_temp: int = min_temp
+        self.__sliders: dict[str, dict[str, FanSlider]] = {}
         self.__devices: list[Any] = devices
         self.__modes: ObservableDict = modes
         self.__sources: ObservableDict = sources
@@ -61,7 +76,7 @@ class DeviceSection(QHBoxLayout):
         self.__update_signal: ImportSignal = update_signal
         self.__rpms: ObservableDict = ObservableDict()
         self.__construct_layout()
-        self.__worker: Worker = Worker(self.__devices, server_config)
+        self.__worker: Worker = Worker(self.__devices, self.__sliders, server_config)
         self.__worker.rpms.connect(self.__update_rpms)
         self.__worker.start()
 
@@ -110,15 +125,14 @@ class DeviceSection(QHBoxLayout):
     def __get_channel_mode(new_modes: dict[str, Any]|ObservableDict, device_id: str,
                            channel: str) -> str:
         """Change Source box state."""
-        device_modes: dict[str, Any] = new_modes[device_id]
-        if not device_modes:
-            return ""
-        return device_modes.get(channel, "")
+        if device_modes := new_modes[device_id]:
+            return device_modes.get(channel, "")
+        return ""
 
-    def __calculate_fan_speed(self, device_id: str, channel: str, temps: dict[str, Any]) -> int:
-        """Calcualte fan speed."""
-        channel_mode: str = self.__get_channel_mode(self.__modes, device_id, channel)
-        if not channel_mode or "Custom" == channel_mode:
+    def __calculate_fan_speed(self, device_id: str, channel: str, temps: dict[str, Any],
+                                    channel_mode: str) -> int:
+        """Calculate fan speed."""
+        if not channel_mode:
             return self.__min_temp
         device_sources: dict[str, Any] = self.__sources[device_id]
         if not device_sources:
@@ -141,20 +155,20 @@ class DeviceSection(QHBoxLayout):
     def __change_slider_state(self, new_modes: dict[str, Any], slider: FanSlider, device_id: str,
                                     channel: str) -> None:
         """Change Source box state."""
-        channel_mode: str = self.__get_channel_mode(new_modes, device_id, channel)
-        if not channel_mode:
-            return
-        slider.setEnabled("Custom" == channel_mode)
+        slider.setEnabled("Custom" == self.__get_channel_mode(new_modes, device_id, channel))
 
     def __change_slider_value(self, temps: dict[str, Any], slider: FanSlider, device_id: str,
                                     channel: str) -> None:
         """Change Source box state."""
-        speed: int = self.__calculate_fan_speed(device_id, channel, temps)
+        channel_mode: str = self.__get_channel_mode(self.__modes, device_id, channel)
+        if "Custom" == channel_mode:
+            return
+        speed: int = self.__calculate_fan_speed(device_id, channel, temps, channel_mode)
         slider.setValue(int(min(100, speed)))
 
     def __create_fan_slider(self, device_id: str, channel: str) -> FanSlider:
         """Create FAN slider."""
-        fan_slider: FanSlider = FanSlider(self.__devices[int(device_id)], channel)
+        fan_slider: FanSlider = FanSlider()
         self.__modes.value_changed.connect(lambda modes: self.__change_slider_state(modes,
                                                                                     fan_slider,
                                                                                     device_id,
@@ -218,6 +232,9 @@ class DeviceSection(QHBoxLayout):
         fan_layout.addLayout(header_layout)
         fan_layout.addLayout(slider_layout)
         fan_layout.addLayout(self.__create_fan_settings(device_id, channel))
+        if device_id not in self.__sliders:
+            self.__sliders[device_id] = {}
+        self.__sliders[device_id][channel] = fan_slider
         return fan_layout
 
     def __create_device_layout(self, device: Any, device_id: str) -> QVBoxLayout:

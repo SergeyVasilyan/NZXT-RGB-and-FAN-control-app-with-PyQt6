@@ -1,32 +1,20 @@
 """Fan slider widget."""
 
-from typing import Any
-from PySide6.QtCore import QThread, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QSlider, QWidget
 
 
 class FanSlider(QSlider):
     """Fan Slider widget."""
 
-    def __init__(self, device: Any, channel: str, parent: QWidget|None=None) -> None:
+    def __init__(self, parent: QWidget|None=None) -> None:
         """Init fan slider widget."""
         super().__init__(parent=parent)
         self.setOrientation(Qt.Orientation.Vertical)
         self.setMinimum(0)
         self.setValue(30)
         self.setMaximum(100)
-        self.__device: Any = device
-        self.__channel: str = channel
-        self.valueChanged.connect(self.__update_fan_speed)
-
-    def __update_fan_speed(self) -> None:
-        """Set Fan speed to corresponding value."""
-        self.__update_slider_style()
-        try:
-            self.__device.set_fixed_speed(self.__channel, self.value())
-            QThread.msleep(100)
-        except ValueError:
-            print(f"ERROR: Failed to set fan speed for {self.__device=} {self.__channel=}")
+        self.valueChanged.connect(self.__update_slider_style)
 
     def __update_slider_style(self) -> None:
        """Update given QSlider style."""

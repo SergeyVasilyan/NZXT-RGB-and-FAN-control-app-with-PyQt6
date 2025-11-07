@@ -87,7 +87,7 @@ class AboutPopup(QDialog):
         return links_layout
 
     def __construct_layout(self) -> None:
-        """Construct ."""
+        """Construct layout."""
         layout: QVBoxLayout = QVBoxLayout()
         layout.addLayout(self.__construct_header())
         layout.addStretch()
