@@ -2,7 +2,7 @@
 
 from enum import StrEnum
 import os
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
@@ -21,18 +21,6 @@ class PathManager(StrEnum):
     SOURCE = "src"
     ICONS = os.path.join(SOURCE, "icons")
     PRESETS = os.path.join(SOURCE, "presets")
-
-class ImportSignal(QObject):
-    """Simple import update signal."""
-    imported: Signal = Signal()
-
-    def __init__(self) -> None:
-        """INIT."""
-        super().__init__()
-
-    def update(self) -> None:
-        """Trigger signal."""
-        self.imported.emit()
 
 def create_separator(horizontal: bool=False) -> QFrame:
     separator: QFrame = QFrame()
@@ -78,6 +66,7 @@ def create_icon(name: str, theme: str) -> QIcon:
     return QIcon(pixmap)
 
 def create_ruler(min_val: int=0, max_val: int=100, step: int=10, left: bool=True) -> QVBoxLayout:
+    """Create ruler."""
     layout: QVBoxLayout = QVBoxLayout()
     layout.setSpacing(0)
     layout.setContentsMargins(0, 0, 0, 0)

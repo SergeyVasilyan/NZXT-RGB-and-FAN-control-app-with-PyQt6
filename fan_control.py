@@ -13,7 +13,6 @@ from typing import Any, override
 
 import requests
 import src.utils.common as utils
-from liquidctl import find_liquidctl_devices
 from PySide6.QtCore import (
     QEvent,
     QRect,
@@ -42,9 +41,10 @@ from PySide6.QtWidgets import (
 )
 from src.layouts.device import DeviceSection
 from src.layouts.temp import TemperatureSection
-from src.utils.common import ImportSignal, PathManager
-from src.utils.dummy import DummyDevice
+from src.utils.common import PathManager
+from src.utils.device_manager import DeviceManager
 from src.utils.observable_dict import ObservableDict
+from src.utils.signals import GLOBAL_SIGNALS
 from src.widgets.application import Application
 from src.widgets.config import AppConfig
 from src.widgets.menubar import MenuBar
@@ -151,7 +151,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(self.__app_name)
         self.setMinimumSize(QSize(screen_size.width() // 2, screen_size.height() // 2))
         self.setWindowIcon(self.__create_icon("icon"))
-        self.__devices: list[Any] = self.__init_devices()
         self.__min_temp: int = 30
         self.__temps: ObservableDict = ObservableDict({
             "CPU": self.__min_temp,
@@ -172,7 +171,6 @@ class MainWindow(QMainWindow):
         self.__worker: Worker = Worker(self.__server_config, self.__temp_source, self.__min_temp)
         self.__worker.new_info.connect(self.__update_device_info)
         self.__worker.start()
-        self.__update_signal: ImportSignal = ImportSignal()
         self.__tray_icon: QSystemTrayIcon
         presets: list[str] = []
         for _, _, files in os.walk(PathManager.PRESETS):
@@ -182,6 +180,7 @@ class MainWindow(QMainWindow):
                 if ".json" in file.lower():
                     presets.append(os.path.splitext(file)[0].title())
         presets.append("Custom")
+        self.__device_manager: DeviceManager = DeviceManager()
         self.__create_system_tray(presets)
         self.setMenuBar(MenuBar(self.__server_config, self.__export_current_configuration,
                                 self.__load_configuration, self.__theme_manager, self.__tray_icon))
@@ -190,7 +189,6 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self.hide)
         else:
             self.show()
-        QTimer.singleShot(1_000, self.__connect_devices)
 
     def __create_icon(self, name: str) -> QIcon:
         """Create themed QIcon."""
@@ -249,7 +247,7 @@ class MainWindow(QMainWindow):
             self.__modes[device_id] = device_modes
             self.__sources[device_id] = device_sources
         if filename != self.__settings:
-            self.__update_signal.update()
+            GLOBAL_SIGNALS.imported.emit()
             self.__tray_icon.showMessage("Import Configuration", message, icon, 3000)
 
     def __load_preset(self, preset: str) -> None:
@@ -283,8 +281,6 @@ class MainWindow(QMainWindow):
                                                                  QMessageBox.StandardButton.No)
 
         if QMessageBox.StandardButton.Yes == reply:
-            for device in self.__devices:
-                device.disconnect()
             self.__export_current_configuration(settings=True)
             self.__worker.quit()
             while self.__worker.isRunning():
@@ -296,7 +292,7 @@ class MainWindow(QMainWindow):
         self.showNormal()
         self.activateWindow()
 
-    def __on_tray_activated(self, reason: QEvent):
+    def __on_tray_activated(self, reason: QEvent) -> None:
         if reason in [QSystemTrayIcon.ActivationReason.DoubleClick,
                       QSystemTrayIcon.ActivationReason.Trigger]:
             self.__restore_window()
@@ -365,8 +361,8 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(self.__create_preset_section(presets))
         main_layout.addLayout(TemperatureSection(self.__temps, self.__names, self.__temp_source))
         main_layout.addWidget(utils.create_separator(horizontal=True))
-        main_layout.addLayout(DeviceSection(self.__devices, self.__modes, self.__sources,
-                                            self.__temps, self.__update_signal, self.__min_temp,
+        main_layout.addLayout(DeviceSection(self.__device_manager.devices, self.__modes,
+                                            self.__sources, self.__temps, self.__min_temp,
                                             self.__server_config))
 
     def __create_central_widget(self, presets: list[str]) -> None:
@@ -377,27 +373,6 @@ class MainWindow(QMainWindow):
         utils.force_refresh(central_widget)
         self.__configure_layouts(central_widget, presets)
         self.setCentralWidget(central_widget)
-
-    def __init_devices(self) -> list[Any]:
-        devices: list[Any] = []
-        potential_devices: list[Any] = list(find_liquidctl_devices())
-        if not potential_devices:
-            potential_devices = [DummyDevice() for _ in range(3)]
-        for device in potential_devices:
-            device.connect()
-            if "NZXT" not in device.description:
-                continue
-            devices.append(device)
-        return devices
-
-    def __connect_devices(self) -> bool:
-        """Connect all devices."""
-        try:
-            for device in self.__devices:
-                device.initialize()
-            return True
-        except Exception:
-            return False
 
     @override
     def closeEvent(self, a0: QCloseEvent|None) -> None:
