@@ -7,7 +7,8 @@ from PySide6.QtCore import QObject, Signal
 class GlobalSignals(QObject):
     """Global Singals class."""
 
-    update_rpm: Signal = Signal(str, str, int)
+    update_rpm: Signal = Signal(int, str, int)
+    update_speed: Signal = Signal(int, str, int)
     imported: Signal = Signal()
 
 GLOBAL_SIGNALS: GlobalSignals = GlobalSignals()

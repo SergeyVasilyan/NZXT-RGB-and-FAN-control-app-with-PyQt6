@@ -180,7 +180,7 @@ class MainWindow(QMainWindow):
                 if ".json" in file.lower():
                     presets.append(os.path.splitext(file)[0].title())
         presets.append("Custom")
-        self.__device_manager: DeviceManager = DeviceManager()
+        self.__device_manager: DeviceManager = DeviceManager(self.__server_config)
         self.__create_system_tray(presets)
         self.setMenuBar(MenuBar(self.__server_config, self.__export_current_configuration,
                                 self.__load_configuration, self.__theme_manager, self.__tray_icon))
@@ -362,8 +362,7 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(TemperatureSection(self.__temps, self.__names, self.__temp_source))
         main_layout.addWidget(utils.create_separator(horizontal=True))
         main_layout.addLayout(DeviceSection(self.__device_manager.devices, self.__modes,
-                                            self.__sources, self.__temps, self.__min_temp,
-                                            self.__server_config))
+                                            self.__sources, self.__temps, self.__min_temp))
 
     def __create_central_widget(self, presets: list[str]) -> None:
         """Create central widget."""

@@ -1,53 +1,21 @@
 """Device section of the app."""
 
-from typing import Any, override
+from typing import Any
 
 from liquidctl.driver import smart_device
 import src.utils.common as utils
-from PySide6.QtCore import Qt, QThread
+from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import QComboBox, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout
 from src.utils.observable_dict import ObservableDict
 from src.utils.signals import GLOBAL_SIGNALS
 from src.widgets.fan_slider import FanSlider
-from src.widgets.settings_dialog import ServerConfiguration
 
-
-class Worker(QThread):
-    """Worker thread that poll fans rpm at given rate."""
-
-    def __init__(self, devices: list[smart_device.SmartDevice2],
-                       sliders: dict[str, dict[str, FanSlider]],
-                       server_config: ServerConfiguration) -> None:
-        """INIT."""
-        super().__init__()
-        self.__sliders: dict[str, dict[str, FanSlider]] = sliders
-        self.__number_of_sliders: int = sum(len(v) for v in sliders.values())
-        self.__devices: list[smart_device.SmartDevice2] = devices
-        self.__config: ServerConfiguration = server_config
-
-    def __update_fans_speed(self) -> None:
-        """Update fan speed."""
-        for device_id, channels in self.__sliders.items():
-            device: Any = self.__devices[int(device_id)]
-            for channel, slider in channels.items():
-                try:
-                    device.set_fixed_speed(channel, slider.value())
-                    self.msleep(self.__config.rate // self.__number_of_sliders)
-                except ValueError:
-                    ...
-
-    @override
-    def run(self) -> None:
-        """Run the worker."""
-        while True:
-            self.__update_fans_speed()
 
 class DeviceSection(QHBoxLayout):
     """Device section."""
 
     def __init__(self, devices: list[smart_device.SmartDevice2], modes: ObservableDict,
-                       sources: ObservableDict, temps: ObservableDict, min_temp: int,
-                       server_config: ServerConfiguration) -> None:
+                       sources: ObservableDict, temps: ObservableDict, min_temp: int) -> None:
         """INIT."""
         super().__init__()
         self.__min_temp: int = min_temp
@@ -58,13 +26,12 @@ class DeviceSection(QHBoxLayout):
         self.__temps: ObservableDict = temps
         self.__labels: dict[str, dict[str, QLabel]] = {}
         self.__construct_layout()
-        self.__worker: Worker = Worker(self.__devices, self.__sliders, server_config)
-        self.__worker.start()
         GLOBAL_SIGNALS.update_rpm.connect(self.__update_fan_rpm)
 
-    def __update_fan_rpm(self, device_id: str, channel: str, value: int) -> None:
+    @Slot(int, str, int)
+    def __update_fan_rpm(self, device_id: int, channel: str, value: int) -> None:
         """Update fan rpm report."""
-        self.__labels.get(device_id, {}).get(channel, QLabel()).setText(f"RPM: {value}")
+        self.__labels.get(str(device_id), {}).get(channel, QLabel()).setText(f"RPM: {value}")
 
     def __update_fan_mode(self, device_id: str, channel: str, mode: str) -> None:
         """Update fan speed calculation mode."""
@@ -139,7 +106,7 @@ class DeviceSection(QHBoxLayout):
 
     def __create_fan_slider(self, device_id: str, channel: str) -> FanSlider:
         """Create FAN slider."""
-        fan_slider: FanSlider = FanSlider()
+        fan_slider: FanSlider = FanSlider(device_id, channel, parent=self.parentWidget())
         self.__modes.value_changed.connect(lambda modes: self.__change_slider_state(modes,
                                                                                     fan_slider,
                                                                                     device_id,
