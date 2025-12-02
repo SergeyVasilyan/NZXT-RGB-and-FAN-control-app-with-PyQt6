@@ -2,11 +2,14 @@
 
 from dataclasses import dataclass
 from typing import override
+from typing_extensions import Any
 
 from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt, Signal, Slot
-from PySide6.QtGui import QClipboard, QColor, QGuiApplication, QIcon, QMouseEvent, QPainter, QPaintEvent, QPen
-from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtGui import QColor, QGuiApplication, QIcon, QMouseEvent, QPainter, QPaintEvent, QPen
+from PySide6.QtWidgets import QComboBox, QDialog, QGridLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
+from src.utils.observable_dict import ObservableDict
+import src.utils.common as utils
 
 @dataclass(order=True, frozen=False)
 class FanCurvePoint:
@@ -31,6 +34,7 @@ class FanCurveWidget(QWidget):
         self.__t_max: float = 85.0
         self.__p_min: float = .0
         self.__p_max: float = 100.0
+        self.__t: FanCurvePoint = FanCurvePoint(temperature=self.__t_min, percent=self.__p_min)
         self.__padding: int = 28
         self.__point_radius: int = 6
         self.__snap_epsilon_px: int = 8
@@ -74,6 +78,13 @@ class FanCurveWidget(QWidget):
             clamped.append(curve_point)
         clamped.sort(key=lambda p: p.temperature)
         self.__points = clamped
+        self.update()
+
+    @Slot(FanCurvePoint)
+    def update_temperature(self, point: FanCurvePoint) -> None:
+        """Update current temperature."""
+        point.clamp(self.__t_min, self.__t_max, self.__p_min, self.__p_max)
+        self.__t = point
         self.update()
 
     def __add_point(self, temperature: float, percent: float) -> None:
@@ -160,6 +171,16 @@ class FanCurveWidget(QWidget):
             painter.drawLine(self.__to_screen(rect, points[i]), self.__to_screen(rect, points[i+1]))
         painter.restore()
 
+    def __draw_temperature_lines(self, painter: QPainter, rect: QRectF) -> None:
+        """Draw temeprature lines."""
+        painter.save()
+        painter.setPen(QPen(QColor(100, 100, 0), 2))
+        painter.drawLine(self.__to_screen(rect, FanCurvePoint(temperature=self.__t_min, percent=self.__t.percent)),
+                         self.__to_screen(rect, FanCurvePoint(temperature=self.__t_max, percent=self.__t.percent)))
+        painter.drawLine(self.__to_screen(rect, FanCurvePoint(temperature=self.__t.temperature, percent=self.__p_min)),
+                         self.__to_screen(rect, FanCurvePoint(temperature=self.__t.temperature, percent=self.__p_max)))
+        painter.restore()
+
     def __draw_points(self, painter: QPainter, rect: QRectF) -> None:
         """Draw points."""
         painter.save()
@@ -198,6 +219,7 @@ class FanCurveWidget(QWidget):
         self.__draw_grid(painter, plot_rect)
         self.__draw_axes(painter, plot_rect)
         self.__draw_curve(painter, plot_rect)
+        self.__draw_temperature_lines(painter, plot_rect)
         self.__draw_points(painter, plot_rect)
         self.__draw_labels(painter, plot_rect)
 
@@ -245,16 +267,24 @@ class FanCurve(QDialog):
     """Fan curve dialog."""
 
     __update_points: Signal = Signal(list)
+    __update_temperature: Signal = Signal(FanCurvePoint)
     __point_separator: str = ","
     __list_separator: str = "|"
 
-    def __init__(self, points: list[FanCurvePoint]|None=None, parent: QWidget|None=None) -> None:
+    def __init__(self, temps: ObservableDict, sources: ObservableDict, device_id: str, channel: str,
+                       points: list[FanCurvePoint]|None=None, parent: QWidget|None=None) -> None:
         """Initialize fan curve dialog."""
         super().__init__(parent)
         self.setModal(True)
         self.setFixedSize(QSize(640, 360))
+        self.__device_id: str = device_id
+        self.__channel: str = channel
+        self.__temps: ObservableDict = temps
+        self.__sources: ObservableDict = sources
         self.__widget: FanCurveWidget = FanCurveWidget(points=points, parent=self)
         self.__update_points.connect(self.__widget.set_points)
+        self.__update_temperature.connect(self.__widget.update_temperature)
+        self.__temps.value_changed.connect(self.__update_temperature_line)
         self.__construct_layout()
 
     @property
@@ -306,6 +336,17 @@ class FanCurve(QDialog):
             return []
         return points
 
+    def __update_temperature_line(self) -> None:
+        """Update temperature line."""
+        device_sources: dict[str, Any] = self.__sources[self.__device_id]
+        if not device_sources:
+            return
+        source: str = device_sources.get(self.__channel, "")
+        temperature: float = self.__temps[source]
+        self.__update_temperature.emit(FanCurvePoint(temperature=temperature,
+                                                     percent=self.evaluate(self.__widget.points,
+                                                                           temperature)))
+
     def __copy_on_click(self) -> None:
         """Copy current curve to clipboard."""
         QGuiApplication.clipboard().setText(self.convert_points_to_str(self.__widget.points))
@@ -313,6 +354,33 @@ class FanCurve(QDialog):
     def __paste_on_click(self) -> None:
         """Paste clipboard curve information."""
         self.__update_points.emit(self.convert_str_to_points(QGuiApplication.clipboard().text()))
+
+    def __update_fan_source(self, source: str) -> None:
+        """Update fan temperature source."""
+        sources: dict[str, Any] = self.__sources.get_data()
+        if self.__device_id not in sources:
+            sources[self.__device_id] = {}
+        if self.__channel not in sources[self.__device_id]:
+            sources[self.__device_id][self.__channel] = {}
+        sources[self.__device_id][self.__channel] = source
+        self.__sources[self.__device_id] = sources[self.__device_id]
+
+    def __construct_source_layout(self) -> QGridLayout:
+        """Create fan settings layout."""
+        layout: QGridLayout = QGridLayout()
+        layout.addWidget(utils.create_label("Source"), 0, 0, alignment=Qt.AlignmentFlag.AlignRight)
+        source_box: QComboBox = QComboBox()
+        source_box.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        source_box.addItems([*self.__temps.get_data().keys()])
+        source_box.currentTextChanged.connect(self.__update_fan_source)
+        current_text: str = source_box.currentText()
+        if self.__device_id in self.__sources\
+            and self.__channel in self.__sources[self.__device_id]:
+            current_text = self.__sources[self.__device_id][self.__channel]
+            source_box.setCurrentText(current_text)
+        layout.addWidget(source_box, 0, 1, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.__update_fan_source(current_text)
+        return layout
 
     def __construct_buttons_layout(self) -> QHBoxLayout:
         """Construct buttons layout."""
@@ -331,6 +399,7 @@ class FanCurve(QDialog):
         layout: QVBoxLayout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+        layout.addLayout(self.__construct_source_layout(), stretch=0)
         layout.addWidget(self.__widget, stretch=1)
         layout.addLayout(self.__construct_buttons_layout(), stretch=0)
         self.setLayout(layout)
