@@ -16,6 +16,7 @@ class FanSlider(QSlider):
         self.setMinimum(0)
         self.setValue(30)
         self.setMaximum(100)
+        self.setEnabled(False)
         self.__device_id: int = int(device_id)
         self.__channel: str = channel
         self.valueChanged.connect(self.__update_slider_style)

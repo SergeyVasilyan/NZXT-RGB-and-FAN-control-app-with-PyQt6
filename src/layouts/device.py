@@ -5,43 +5,40 @@ from typing import Any
 from liquidctl.driver import smart_device
 import src.utils.common as utils
 from PySide6.QtCore import Qt, Slot
-from PySide6.QtWidgets import QComboBox, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QComboBox, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 from src.utils.observable_dict import ObservableDict
 from src.utils.signals import GLOBAL_SIGNALS
+from src.widgets.curve import FanCurve, FanCurvePoint
 from src.widgets.fan_slider import FanSlider
 
 
 class DeviceSection(QHBoxLayout):
     """Device section."""
 
-    def __init__(self, devices: list[smart_device.SmartDevice2], modes: ObservableDict,
-                       sources: ObservableDict, temps: ObservableDict, min_temp: int) -> None:
+    def __init__(self, devices: list[smart_device.SmartDevice2], sources: ObservableDict,
+                       temps: ObservableDict, curves: dict[str, dict[str, list[FanCurvePoint]]],
+                       min_temp: int) -> None:
         """INIT."""
         super().__init__()
         self.__min_temp: int = min_temp
         self.__sliders: dict[str, dict[str, FanSlider]] = {}
         self.__devices: list[smart_device.SmartDevice2] = devices
-        self.__modes: ObservableDict = modes
         self.__sources: ObservableDict = sources
         self.__temps: ObservableDict = temps
         self.__labels: dict[str, dict[str, QLabel]] = {}
+        self.__curves: dict[str, dict[str, list[FanCurvePoint]]] = curves
         self.__construct_layout()
         GLOBAL_SIGNALS.update_rpm.connect(self.__update_fan_rpm)
+
+    @property
+    def curves(self) -> dict[str, dict[str, list[FanCurvePoint]]]:
+        """Return current fan curves."""
+        return self.__curves
 
     @Slot(int, str, int)
     def __update_fan_rpm(self, device_id: int, channel: str, value: int) -> None:
         """Update fan rpm report."""
         self.__labels.get(str(device_id), {}).get(channel, QLabel()).setText(f"RPM: {value}")
-
-    def __update_fan_mode(self, device_id: str, channel: str, mode: str) -> None:
-        """Update fan speed calculation mode."""
-        modes: dict[str, Any] = self.__modes.get_data()
-        if device_id not in modes:
-            modes[device_id] = {}
-        if channel not in modes[device_id]:
-            modes[device_id][channel] = {}
-        modes[device_id][channel] = mode
-        self.__modes[device_id] = modes[device_id]
 
     def __update_fan_source(self, device_id: str, channel: str, source: str) -> None:
         """Update fan temperature source."""
@@ -53,64 +50,34 @@ class DeviceSection(QHBoxLayout):
         sources[device_id][channel] = source
         self.__sources[device_id] = sources[device_id]
 
-    def __update_value_on_import(self, device_id: str, channel: str, mode_box: QComboBox,
-                                       source_box: QComboBox) -> None:
+    def __update_value_on_import(self, device_id: str, channel: str, source_box: QComboBox) -> None:
         """Update mode on Import."""
-        mode_box.setCurrentText(self.__modes[device_id][channel])
         source_box.setCurrentText(self.__sources[device_id][channel])
 
-    @staticmethod
-    def __get_channel_mode(new_modes: dict[str, Any]|ObservableDict, device_id: str,
-                           channel: str) -> str:
-        """Change Source box state."""
-        if device_modes := new_modes[device_id]:
-            return device_modes.get(channel, "")
-        return ""
-
-    def __calculate_fan_speed(self, device_id: str, channel: str, temps: dict[str, Any],
-                                    channel_mode: str) -> int:
-        """Calculate fan speed."""
-        if not channel_mode:
-            return self.__min_temp
-        device_sources: dict[str, Any] = self.__sources[device_id]
-        if not device_sources:
-            return self.__min_temp
-        source: str = device_sources.get(channel, "")
-        if not source:
-            return self.__min_temp
-        max_temp: int = 80
-        noise: int = 20
-        power: float = 1.0
-        temp: int = max(self.__min_temp, min(int(temps[source]), max_temp))
-        if "Aggressive" == channel_mode:
-            noise = 10
-            power = 0.5
-        elif "Silent" == channel_mode:
-            power = 1.5
-        difference: int = max_temp - noise
-        return self.__min_temp + ((temp - noise) / difference) ** power * difference
-
-    def __change_slider_state(self, new_modes: dict[str, Any], slider: FanSlider, device_id: str,
-                                    channel: str) -> None:
-        """Change Source box state."""
-        slider.setEnabled("Custom" == self.__get_channel_mode(new_modes, device_id, channel))
+    def __curve_on_click(self, device_id: str, channel: str) -> None:
+        """Curve button on click callback."""
+        dialog: FanCurve = FanCurve(points=self.__curves.get(device_id, {}).get(channel, None),
+                                    parent=self.parentWidget())
+        dialog.exec()
+        if device_id not in self.__curves:
+            self.__curves[device_id] = {}
+        self.__curves[device_id][channel] = dialog.points
 
     def __change_slider_value(self, temps: dict[str, Any], slider: FanSlider, device_id: str,
                                     channel: str) -> None:
         """Change Source box state."""
-        channel_mode: str = self.__get_channel_mode(self.__modes, device_id, channel)
-        if "Custom" == channel_mode:
+        device_sources: dict[str, Any] = self.__sources[device_id]
+        if not device_sources:
             return
-        speed: int = self.__calculate_fan_speed(device_id, channel, temps, channel_mode)
+        source: str = device_sources.get(channel, "")
+        temp: float = max(self.__min_temp, temps.get(source, .0))
+        points: list[FanCurvePoint] = self.__curves.get(device_id, {}).get(channel, [])
+        speed: int = int(FanCurve.evaluate(points, temp))
         slider.setValue(int(min(100, speed)))
 
     def __create_fan_slider(self, device_id: str, channel: str) -> FanSlider:
         """Create FAN slider."""
         fan_slider: FanSlider = FanSlider(device_id, channel, parent=self.parentWidget())
-        self.__modes.value_changed.connect(lambda modes: self.__change_slider_state(modes,
-                                                                                    fan_slider,
-                                                                                    device_id,
-                                                                                    channel))
         self.__temps.value_changed.connect(lambda temps: self.__change_slider_value(temps,
                                                                                     fan_slider,
                                                                                     device_id,
@@ -133,21 +100,8 @@ class DeviceSection(QHBoxLayout):
             source_box.setCurrentText(current_text)
         fan_settings.addWidget(source_box, 0, 1)
         self.__update_fan_source(device_id, channel, current_text)
-        fan_settings.addWidget(utils.create_label("Mode"), 1, 0,
-                               alignment=Qt.AlignmentFlag.AlignRight)
-        mode_box: QComboBox = QComboBox()
-        mode_box.addItems(["Normal", "Aggressive", "Silent", "Custom"])
-        mode_box.currentTextChanged.connect(lambda mode: self.__update_fan_mode(device_id,
-                                                                                channel,
-                                                                                mode))
-        current_text: str = mode_box.currentText()
-        if device_id in self.__modes and channel in self.__modes[device_id]:
-            current_text = self.__modes[device_id][channel]
-            mode_box.setCurrentText(current_text)
-        self.__update_fan_mode(device_id, channel, current_text)
         GLOBAL_SIGNALS.imported.connect(lambda: self.__update_value_on_import(device_id, channel,
-                                                                              mode_box, source_box))
-        fan_settings.addWidget(mode_box, 1, 1)
+                                                                              source_box))
         return fan_settings
 
     def __create_fan_layout(self, device_id: str, channel: str) -> QVBoxLayout:
@@ -156,9 +110,12 @@ class DeviceSection(QHBoxLayout):
         header_layout: QHBoxLayout = QHBoxLayout()
         channel_label: QLabel = utils.create_label(channel, target="channel")
         rpm_label: QLabel = utils.create_label("RPM: N/A")
+        button: QPushButton = QPushButton("Curve")
+        button.clicked.connect(lambda: self.__curve_on_click(device_id, channel))
         self.__labels[device_id][channel] = rpm_label
         header_layout.addWidget(channel_label, alignment=Qt.AlignmentFlag.AlignLeft)
-        header_layout.addWidget(rpm_label, alignment=Qt.AlignmentFlag.AlignRight)
+        header_layout.addWidget(rpm_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        header_layout.addWidget(button, alignment=Qt.AlignmentFlag.AlignRight)
         slider_layout: QHBoxLayout = QHBoxLayout()
         slider_layout.addLayout(utils.create_ruler())
         fan_slider: FanSlider = self.__create_fan_slider(device_id, channel)

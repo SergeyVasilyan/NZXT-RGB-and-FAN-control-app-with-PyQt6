@@ -30,8 +30,6 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
-    QComboBox,
-    QHBoxLayout,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -41,12 +39,12 @@ from PySide6.QtWidgets import (
 )
 from src.layouts.device import DeviceSection
 from src.layouts.temp import TemperatureSection
-from src.utils.common import PathManager
 from src.utils.device_manager import DeviceManager
 from src.utils.observable_dict import ObservableDict
 from src.utils.signals import GLOBAL_SIGNALS
 from src.widgets.application import Application
 from src.widgets.config import AppConfig
+from src.widgets.curve import FanCurve, FanCurvePoint
 from src.widgets.menubar import MenuBar
 from src.widgets.settings_dialog import ServerConfiguration
 from src.widgets.theme_manager import ThemeManager
@@ -144,8 +142,8 @@ class MainWindow(QMainWindow):
         AppConfig.set("start_minimized", False)
         AppConfig.set("minimize_on_exit", False)
         self.__theme_manager: ThemeManager = theme_manager
-        self.__modes: ObservableDict = ObservableDict()
         self.__sources: ObservableDict = ObservableDict()
+        self.__curves: dict[str, dict[str, list[FanCurvePoint]]] = {}
         self.__server_config: ServerConfiguration = ServerConfiguration()
         screen_size: QRect = QGuiApplication.primaryScreen().availableGeometry()
         self.setWindowTitle(self.__app_name)
@@ -172,19 +170,11 @@ class MainWindow(QMainWindow):
         self.__worker.new_info.connect(self.__update_device_info)
         self.__worker.start()
         self.__tray_icon: QSystemTrayIcon
-        presets: list[str] = []
-        for _, _, files in os.walk(PathManager.PRESETS):
-            if not files:
-                continue
-            for file in files:
-                if ".json" in file.lower():
-                    presets.append(os.path.splitext(file)[0].title())
-        presets.append("Custom")
         self.__device_manager: DeviceManager = DeviceManager(self.__server_config)
-        self.__create_system_tray(presets)
+        self.__create_system_tray()
         self.setMenuBar(MenuBar(self.__server_config, self.__export_current_configuration,
                                 self.__load_configuration, self.__theme_manager, self.__tray_icon))
-        self.__create_central_widget(presets)
+        self.__create_central_widget()
         if AppConfig.get("start_minimized"):
             QTimer.singleShot(0, self.hide)
         else:
@@ -198,14 +188,14 @@ class MainWindow(QMainWindow):
                                              settings: bool=False) -> dict[str, Any]:
         """Export current configuration."""
         devices: dict[str, Any] = {}
-        modes: dict[str, Any] = self.__modes.get_data()
         sources: dict[str, Any] = self.__sources.get_data()
-        for device_id, fans in modes.items():
+        for device_id, channels in sources.items():
             devices[device_id] = {}
-            for fan_id, mode in fans.items():
-                devices[device_id][fan_id] = {
-                    "mode": mode,
-                    "source": sources[device_id][fan_id],
+            for channel, source in channels.items():
+                curve: list[FanCurvePoint] = self.__curves.get(device_id, {}).get(channel, [])
+                devices[device_id][channel] = {
+                    "curve": FanCurve.convert_points_to_str(curve),
+                    "source": source,
                 }
         configuration: dict[str, Any] = {
             "devices": devices,
@@ -237,22 +227,18 @@ class MainWindow(QMainWindow):
         except Exception as _:
             message = f"Failed to import '{filename}' configuration.\nPlease choose valid file."
             icon = QSystemTrayIcon.MessageIcon.Critical
-        for device_id, fans in configuration.get("devices", {}).items():
+        for device_id, channels in configuration.get("devices", {}).items():
             configuration[device_id] = {}
-            device_modes: dict[str, Any] = {}
-            device_sources: dict[str, Any] = {}
-            for fan_id, fan_info in fans.items():
-                device_modes[fan_id] = fan_info["mode"]
-                device_sources[fan_id] = fan_info["source"]
-            self.__modes[device_id] = device_modes
-            self.__sources[device_id] = device_sources
+            sources: dict[str, Any] = {}
+            curves: dict[str, list[FanCurvePoint]] = {}
+            for channel, channel_info in channels.items():
+                sources[channel] = channel_info["source"]
+                curves[channel] = FanCurve.convert_str_to_points(channel_info["curve"])
+            self.__sources[device_id] = sources
+            self.__curves[device_id] = curves
         if filename != self.__settings:
             GLOBAL_SIGNALS.imported.emit()
             self.__tray_icon.showMessage("Import Configuration", message, icon, 3000)
-
-    def __load_preset(self, preset: str) -> None:
-        """Load selected preset."""
-        self.__load_configuration(os.path.join(PathManager.PRESETS, f"{preset.lower()}.json"))
 
     def __load_settings(self) -> None:
         """Load current settings."""
@@ -308,13 +294,7 @@ class MainWindow(QMainWindow):
         self.__names["CPU"] = cpu.model
         self.__names["GPU"] = gpu.model
 
-    def __create_preset_action(self, preset_menu: QMenu, preset: str) -> None:
-        """Create preset QAction."""
-        action: QAction = QAction(preset, preset_menu)
-        action.triggered.connect(lambda _: self.__load_preset(preset))
-        preset_menu.addAction(action)
-
-    def __create_system_tray(self, presets: list[str]) -> None:
+    def __create_system_tray(self) -> None:
         """Create and setup system tray icon."""
         self.__tray_icon = QSystemTrayIcon(self.__create_icon("icon"), self)
         self.__tray_icon.setToolTip(self.__app_name)
@@ -325,52 +305,28 @@ class MainWindow(QMainWindow):
         quit_action: QAction = QAction(self.__create_icon("exit"), "Exit", self)
         restore_action.triggered.connect(self.__restore_window)
         quit_action.triggered.connect(self.__close)
-        preset_menu: QMenu = QMenu("Presets", self)
-        preset_menu.setIcon(self.__create_icon("file"))
-        for preset in presets:
-            self.__create_preset_action(preset_menu, preset)
-        tray_menu.addMenu(preset_menu)
-        tray_menu.addSeparator()
         tray_menu.addAction(restore_action)
         tray_menu.addAction(quit_action)
         self.__tray_icon.show()
 
-    def __create_preset_section(self, presets: list[str]) -> QHBoxLayout:
-        """Create preset section."""
-        preset_layout: QHBoxLayout = QHBoxLayout()
-        preset_box: QComboBox = QComboBox()
-        preset_box.addItems(presets)
-        modes: dict[str, Any] = self.__modes.get_data()
-        current_modes: list[str] = []
-        for fans in modes.values():
-            for mode in fans.values():
-                if mode not in current_modes:
-                    current_modes.append(mode)
-        current_preset: str = current_modes[0] if 1 == len(current_modes) else "Custom"
-        preset_box.setCurrentText(current_preset)
-        preset_box.currentTextChanged.connect(lambda preset: self.__load_preset(preset))
-        preset_layout.addWidget(utils.create_label("Preset", size="medium"),
-                                alignment=Qt.AlignmentFlag.AlignRight)
-        preset_layout.addWidget(preset_box, alignment=Qt.AlignmentFlag.AlignLeft)
-        return preset_layout
-
-    def __configure_layouts(self, central_widget: QWidget, presets: list[str]) -> None:
+    def __configure_layouts(self, central_widget: QWidget) -> None:
         """Create and configure layouts."""
         main_layout: QVBoxLayout = QVBoxLayout()
         central_widget.setLayout(main_layout)
-        main_layout.addLayout(self.__create_preset_section(presets))
+        device_widget: DeviceSection = DeviceSection(self.__device_manager.devices, self.__sources,
+                                                     self.__temps, self.__curves, self.__min_temp)
+        self.__curves = device_widget.curves
         main_layout.addLayout(TemperatureSection(self.__temps, self.__names, self.__temp_source))
         main_layout.addWidget(utils.create_separator(horizontal=True))
-        main_layout.addLayout(DeviceSection(self.__device_manager.devices, self.__modes,
-                                            self.__sources, self.__temps, self.__min_temp))
+        main_layout.addLayout(device_widget)
 
-    def __create_central_widget(self, presets: list[str]) -> None:
+    def __create_central_widget(self) -> None:
         """Create central widget."""
         central_widget: QWidget = QWidget()
         central_widget.setAutoFillBackground(True)
         central_widget.setProperty("id", "central")
         utils.force_refresh(central_widget)
-        self.__configure_layouts(central_widget, presets)
+        self.__configure_layouts(central_widget)
         self.setCentralWidget(central_widget)
 
     @override
