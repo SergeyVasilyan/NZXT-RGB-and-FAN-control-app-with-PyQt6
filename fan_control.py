@@ -175,7 +175,7 @@ class MainWindow(QMainWindow):
         self.setMenuBar(MenuBar(self.__server_config, self.__export_current_configuration,
                                 self.__load_configuration, self.__theme_manager, self.__tray_icon))
         self.__create_central_widget()
-        if AppConfig.get("start_minimized"):
+        if AppConfig.get("start_minimized", value_type=bool):
             QTimer.singleShot(0, self.hide)
         else:
             self.show()
@@ -208,8 +208,9 @@ class MainWindow(QMainWindow):
                 "port": self.__server_config.port,
                 "rate": self.__server_config.rate,
             }
-            for config in ["start_minimized", "minimize_on_exit", "theme"]:
-                configuration[config] = AppConfig.get(config)
+            for config in ["start_minimized", "minimize_on_exit", "start_at_logon", "theme"]:
+                configuration[config] = AppConfig.get(config,
+                                                      value_type=str if config == "theme" else bool)
         configuration["date"] = str(datetime.now())
         if filename:
             with open(filename, "w") as f:
@@ -250,6 +251,7 @@ class MainWindow(QMainWindow):
             settings = json.load(f)
         AppConfig.set("start_minimized", settings.get("start_minimized", False))
         AppConfig.set("minimize_on_exit", settings.get("minimize_on_exit", False))
+        AppConfig.set("start_at_logon", settings.get("start_at_logon", False))
         AppConfig.set("theme", settings.get("theme", "dark"))
         if server_config := settings.get("server", {}):
             self.__server_config.ip = server_config.get("ip", "")
@@ -334,7 +336,7 @@ class MainWindow(QMainWindow):
         """Override the close event to handle application minimize to system tray."""
         if a0:
             a0.ignore()
-        if not AppConfig.get("minimize_on_exit"):
+        if not AppConfig.get("minimize_on_exit", value_type=bool):
             self.__close()
             return
         QTimer.singleShot(0, self.hide)

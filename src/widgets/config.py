@@ -7,14 +7,11 @@ from PySide6.QtCore import QSettings
 
 class AppConfig:
     """Singleton app settings."""
-    _settings: QSettings = QSettings("self", "nzxt-fan-control")
+    _settings: QSettings = QSettings("FOSFC", "free-fan-control")
 
     @classmethod
-    def get(cls, key: str, default: Any=None) -> Any:
+    def get(cls, key: str, default: Any=None, value_type: type=str) -> Any:
         """Get value from settings."""
-        value_type: type = str
-        if key in ["start_minimized", "minimize_on_exit"]:
-            value_type = bool
         return cls._settings.value(key, default, type=value_type)
 
     @classmethod

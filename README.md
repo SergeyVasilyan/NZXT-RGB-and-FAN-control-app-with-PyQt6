@@ -98,8 +98,8 @@ After that the app will automatically query the JSON endpoint to retrieve temper
 
 - [x] Device auto-discovery
 - [x] Graphical fan curve editor
+- [x] Startup automation toggle
 - [ ] Fan curve presets (Silent, Normal, Aggressive)
-- [ ] Startup automation toggle
 
 ---
 
