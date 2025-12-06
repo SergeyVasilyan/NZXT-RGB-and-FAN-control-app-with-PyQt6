@@ -33,7 +33,7 @@ A free, open-source alternative to NZXT CAM and SignalRGB—built with PyQt6 to 
 ### Requirements
 
 - Python 3.10+
-- PyQt6
+- PySide6
 - liquidctl
 - LibreHardwareMonitor
 
@@ -71,7 +71,7 @@ This app uses [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/Lib
 
 4. **Start NZXT FAN Control App**
     - Go to `Settings` -> `Source configuration`
-    - Set `IP` and `PORT` of **LibreHardwareMonitor's server**
+    - Set `PORT` of **LibreHardwareMonitor's server**
     - Click on `Save`
 
 After that the app will automatically query the JSON endpoint to retrieve temperature values
@@ -97,7 +97,7 @@ After that the app will automatically query the JSON endpoint to retrieve temper
 ## 🛠️ Roadmap
 
 - [x] Device auto-discovery
-- [ ] Graphical fan curve editor
+- [x] Graphical fan curve editor
 - [ ] Fan curve presets (Silent, Normal, Aggressive)
 - [ ] Startup automation toggle
 
