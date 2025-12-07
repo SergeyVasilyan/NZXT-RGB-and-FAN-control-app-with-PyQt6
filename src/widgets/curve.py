@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QComboBox, QDialog, QGridLayout, QHBoxLayout, QLab
 
 from src.utils.observable_dict import ObservableDict
 import src.utils.common as utils
+from src.utils.signals import GLOBAL_SIGNALS
 
 @dataclass(order=True, frozen=False)
 class FanCurvePoint:
@@ -38,8 +39,8 @@ class FanCurveWidget(QWidget):
         self.__padding: int = 28
         self.__point_radius: int = 6
         self.__snap_epsilon_px: int = 8
-        self.__bg: QColor = QColor(28, 28, 32)
-        self.__grid: QColor = QColor(60, 60, 66)
+        self.__bg: QColor = QColor(40, 40, 40)
+        self.__grid: QColor = QColor(80, 80, 80)
         self.__axis: QColor = QColor(180, 180, 190)
         self.__curve: QColor = QColor(80, 180, 250)
         self.__point_fill: QColor = QColor(255, 255, 255)
@@ -263,7 +264,7 @@ class FanCurveWidget(QWidget):
         """Override mouse release event."""
         self.__drag_index = None
 
-class FanCurve(QDialog):
+class FanCurve(QWidget):
     """Fan curve dialog."""
 
     __update_points: Signal = Signal(list)
@@ -271,21 +272,28 @@ class FanCurve(QDialog):
     __point_separator: str = ","
     __list_separator: str = "|"
 
-    def __init__(self, temps: ObservableDict, sources: ObservableDict, device_id: str, channel: str,
-                       points: list[FanCurvePoint]|None=None, parent: QWidget|None=None) -> None:
+    def __init__(self, temps: ObservableDict, sources: ObservableDict,
+                       device_id: str, channel: str, points: list[FanCurvePoint]|None=None,
+                       parent: QWidget|None=None) -> None:
         """Initialize fan curve dialog."""
         super().__init__(parent)
-        self.setModal(True)
-        self.setFixedSize(QSize(640, 360))
         self.__device_id: str = device_id
         self.__channel: str = channel
         self.__temps: ObservableDict = temps
         self.__sources: ObservableDict = sources
+        self.__rpm_label: QLabel = utils.create_label("RPM: N/A")
         self.__widget: FanCurveWidget = FanCurveWidget(points=points, parent=self)
         self.__update_points.connect(self.__widget.set_points)
         self.__update_temperature.connect(self.__widget.update_temperature)
         self.__temps.value_changed.connect(self.__update_temperature_line)
         self.__construct_layout()
+        GLOBAL_SIGNALS.update_rpm.connect(self.__update_fan_rpm)
+
+    @Slot(int, str, int)
+    def __update_fan_rpm(self, device_id: int, channel: str, value: int) -> None:
+        """Update fan rpm report."""
+        if str(device_id) == self.__device_id and channel == self.__channel:
+            self.__rpm_label.setText(f"RPM: {value}")
 
     @property
     def points(self) -> list[FanCurvePoint]:
@@ -343,9 +351,9 @@ class FanCurve(QDialog):
             return
         source: str = device_sources.get(self.__channel, "")
         temperature: float = self.__temps[source]
-        self.__update_temperature.emit(FanCurvePoint(temperature=temperature,
-                                                     percent=self.evaluate(self.__widget.points,
-                                                                           temperature)))
+        speed: float = self.evaluate(self.__widget.points, temperature)
+        GLOBAL_SIGNALS.update_speed.emit(int(self.__device_id), self.__channel, int(speed))
+        self.__update_temperature.emit(FanCurvePoint(temperature=temperature, percent=speed))
 
     def __copy_on_click(self) -> None:
         """Copy current curve to clipboard."""
@@ -368,7 +376,6 @@ class FanCurve(QDialog):
     def __construct_source_layout(self) -> QGridLayout:
         """Create fan settings layout."""
         layout: QGridLayout = QGridLayout()
-        layout.addWidget(utils.create_label("Source"), 0, 0, alignment=Qt.AlignmentFlag.AlignRight)
         source_box: QComboBox = QComboBox()
         source_box.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         source_box.addItems([*self.__temps.get_data().keys()])
@@ -378,7 +385,9 @@ class FanCurve(QDialog):
             and self.__channel in self.__sources[self.__device_id]:
             current_text = self.__sources[self.__device_id][self.__channel]
             source_box.setCurrentText(current_text)
-        layout.addWidget(source_box, 0, 1, alignment=Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(utils.create_label(self.__channel, target="channel"), 0, 0, alignment=Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(source_box, 0, 1, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.__rpm_label, 0, 2, alignment=Qt.AlignmentFlag.AlignRight)
         self.__update_fan_source(current_text)
         return layout
 

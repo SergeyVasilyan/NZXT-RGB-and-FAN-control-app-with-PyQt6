@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, override
 
+from liquidctl.driver.smart_device import SmartDevice2
 import requests
 import src.utils.common as utils
 from PySide6.QtCore import (
@@ -30,6 +31,8 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QHBoxLayout,
+    QListWidget,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -192,9 +195,9 @@ class MainWindow(QMainWindow):
         for device_id, channels in sources.items():
             devices[device_id] = {}
             for channel, source in channels.items():
-                curve: list[FanCurvePoint] = self.__curves.get(device_id, {}).get(channel, [])
+                points: list[FanCurvePoint] = self.__curves.get(device_id, {}).get(channel, [])
                 devices[device_id][channel] = {
-                    "curve": FanCurve.convert_points_to_str(curve),
+                    "curve": FanCurve.convert_points_to_str(points),
                     "source": source,
                 }
         configuration: dict[str, Any] = {
@@ -313,14 +316,25 @@ class MainWindow(QMainWindow):
 
     def __configure_layouts(self, central_widget: QWidget) -> None:
         """Create and configure layouts."""
-        main_layout: QVBoxLayout = QVBoxLayout()
-        central_widget.setLayout(main_layout)
-        device_widget: DeviceSection = DeviceSection(self.__device_manager.devices, self.__sources,
-                                                     self.__temps, self.__curves, self.__min_temp)
+        main_layout: QHBoxLayout = QHBoxLayout()
+        left_layout: QVBoxLayout = QVBoxLayout()
+        right_layout: QVBoxLayout = QVBoxLayout()
+        list_widget: QListWidget = QListWidget()
+        devices: list[SmartDevice2] = self.__device_manager.devices
+        list_widget.addItems([device.description for device in devices])
+        device_widget: DeviceSection = DeviceSection(devices, self.__sources, self.__temps,
+                                                     self.__curves)
         self.__curves = device_widget.curves
-        main_layout.addLayout(TemperatureSection(self.__temps, self.__names, self.__temp_source))
-        main_layout.addWidget(utils.create_separator(horizontal=True))
-        main_layout.addLayout(device_widget)
+        list_widget.currentRowChanged.connect(device_widget.update_layout)
+        list_widget.setCurrentRow(0)
+        main_layout.addLayout(left_layout, stretch=0)
+        main_layout.addWidget(utils.create_separator())
+        main_layout.addLayout(right_layout, stretch=1)
+        central_widget.setLayout(main_layout)
+        left_layout.addLayout(TemperatureSection(self.__temps, self.__names, self.__temp_source))
+        left_layout.addWidget(utils.create_separator(horizontal=True))
+        left_layout.addWidget(list_widget)
+        right_layout.addLayout(device_widget)
 
     def __create_central_widget(self) -> None:
         """Create central widget."""
