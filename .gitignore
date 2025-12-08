@@ -1,3 +1,5 @@
 settings.json
 
 __pycache__/
+.ruff_cache/
+*.py[cod]
