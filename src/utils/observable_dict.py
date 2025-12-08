@@ -7,6 +7,7 @@ from PySide6.QtCore import QObject, Signal
 
 class ObservableDict(QObject):
     """Custom Dict with onChange signal."""
+
     value_changed: Signal = Signal(dict)
 
     def __init__(self, initial: dict|None=None):

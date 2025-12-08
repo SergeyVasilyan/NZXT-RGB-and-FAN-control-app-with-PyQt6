@@ -1,13 +1,15 @@
 """Theme manager."""
 
 import os
+
 from PySide6.QtWidgets import QApplication
 
 
 class ThemeManager:
-    """Theme manager"""
+    """Theme manager."""
 
-    def __init__(self, app: QApplication):
+    def __init__(self, app: QApplication) -> None:
+        """Initialize theme manager."""
         self.__app: QApplication = app
         self.__path: str = "src/styles"
 
@@ -15,7 +17,7 @@ class ThemeManager:
         """Load corresponding QSS."""
         path: str = f"{self.__path}/{name}.qss"
         try:
-            with open(path, "r") as f:
+            with open(path) as f:
                 return f.read()
         except FileNotFoundError:
             return ""

@@ -9,7 +9,8 @@ from src.utils.observable_dict import ObservableDict
 class TemperatureSection(QHBoxLayout):
     """Temperature Section."""
 
-    def __init__(self, temps: ObservableDict, names: ObservableDict, temp_source: dict[str, str]) -> None:
+    def __init__(self, temps: ObservableDict, names: ObservableDict,
+                       temp_source: dict[str, str]) -> None:
         """INIT."""
         super().__init__()
         self.__temp_source: dict[str, str] = temp_source
@@ -52,7 +53,8 @@ class TemperatureSection(QHBoxLayout):
         header_layout.addWidget(source_box, alignment=Qt.AlignmentFlag.AlignRight)
         return header_layout
 
-    def __create_temp_layout(self, source: str, temps: ObservableDict, names: ObservableDict) -> QVBoxLayout:
+    def __create_temp_layout(self, source: str, temps: ObservableDict,
+                                   names: ObservableDict) -> QVBoxLayout:
         """Create Temp layout."""
         temp_layout: QVBoxLayout = QVBoxLayout()
         name_label: QLabel = utils.create_label("N/A", size="small", target="source")

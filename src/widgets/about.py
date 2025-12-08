@@ -1,9 +1,9 @@
 """About Popup."""
 
 import src.utils.common as utils
-from PySide6.QtWidgets import QWidget, QDialog, QLabel, QVBoxLayout, QHBoxLayout, QPushButton
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QIcon
-from PySide6.QtCore import QUrl, Qt
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 from src.widgets.config import AppConfig
 
 
@@ -11,6 +11,7 @@ class AboutPopup(QDialog):
     """About Popup class."""
 
     def __init__(self, parent: QWidget|None=None) -> None:
+        """Initialize about popup."""
         super().__init__(parent)
         if parent:
             self.setWindowIcon(parent.windowIcon())
@@ -25,7 +26,7 @@ class AboutPopup(QDialog):
         """Create themed QIcon."""
         return utils.create_icon(name, AppConfig.get("theme"))
 
-    def __construct_icon(self, ) -> QLabel:
+    def __construct_icon(self) -> QLabel:
         """Construct Icon section."""
         icon_label: QLabel = QLabel()
         icon_label.setPixmap(self.__create_icon("icon").pixmap(64, 64))
@@ -51,11 +52,11 @@ class AboutPopup(QDialog):
     def __construct_license() -> QLabel:
         """Construct License section."""
         license_url: str = "https://www.gnu.org/licenses/gpl-3.0.en.html"
-        license_label: QLabel = utils.create_label((
+        license_label: QLabel = utils.create_label(
             "This application is licensed under <b>GNU GPLv3</b>.<br>"
             "You are free to use, modify, and distribute under its terms.<br><br>"
-            f"<a href='{license_url}'>View full license</a>"
-        ))
+            f"<a href='{license_url}'>View full license</a>",
+        )
         license_label.setOpenExternalLinks(True)
         license_label.setTextFormat(Qt.TextFormat.RichText)
         license_label.setWordWrap(True)
@@ -72,7 +73,7 @@ class AboutPopup(QDialog):
         """Construct Contributors button."""
         contributors_url: str = f"{self.__git}/graphs/contributors"
         contributors_button: QPushButton = QPushButton("Contributors")
-        contributors_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(contributors_url)))
+        contributors_button.clicked.connect(lambda:QDesktopServices.openUrl(QUrl(contributors_url)))
         return contributors_button
 
     def __construct_links(self) -> QHBoxLayout:

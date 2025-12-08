@@ -2,12 +2,12 @@
 
 import os
 import sys
-import win32com.client
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
-from win32com.client.dynamic import CDispatch
+from typing import Any
 
 import src.utils.common as utils
+import win32com.client
 from PySide6.QtCore import QRegularExpression, Qt
 from PySide6.QtGui import QRegularExpressionValidator
 from PySide6.QtWidgets import (
@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 from src.widgets.config import AppConfig
 from src.widgets.theme_manager import ThemeManager
+from win32com.client.dynamic import CDispatch
 
 
 @dataclass
@@ -86,10 +87,10 @@ class SettingsDialog(QDialog):
         settings.StartWhenAvailable = True
         try:
             root_folder.RegisterTaskDefinition(self.__task_name, task,
-                6,  # TASK_CREATE_OR_UPDATE
+                6,     # TASK_CREATE_OR_UPDATE
                 None,  # no user (current user)
                 None,  # no password
-                3      # TASK_LOGON_INTERACTIVE_TOKEN
+                3,     # TASK_LOGON_INTERACTIVE_TOKEN
             )
         except Exception:
             return False
@@ -102,7 +103,7 @@ class SettingsDialog(QDialog):
             scheduler.Connect()
             root_folder: Any = scheduler.GetFolder("\\")
             root_folder.DeleteTask(self.__task_name, 0)
-        except Exception as e:
+        except Exception as _e:
             return False
         return True
 
@@ -127,7 +128,7 @@ class SettingsDialog(QDialog):
         self.__port_input.setPlaceholderText("Enter Port (1–65535)")
         self.__port_input.setPlaceholderText("Enter IP address")
         port_regex: QRegularExpression = QRegularExpression(
-            r"^(6553[0-5]|655[0-2]\d|65[0-4]\d{2}|6[0-4]\d{3}|[1-5]\d{4}|\d{1,4})$"
+            r"^(6553[0-5]|655[0-2]\d|65[0-4]\d{2}|6[0-4]\d{3}|[1-5]\d{4}|\d{1,4})$",
         )
         self.__port_input.setValidator(QRegularExpressionValidator(port_regex))
         layout.addWidget(self.__port_input, row, 1, 1, 2)
@@ -148,9 +149,9 @@ class SettingsDialog(QDialog):
         self.__create_label(layout, "Theme", row)
         self.__theme_box: QComboBox = QComboBox()
         themes: list[str] = self.__theme_manager.get_themes()
-        currentTheme: str = AppConfig.get("theme")
+        current_theme: str = AppConfig.get("theme")
         self.__theme_box.addItems(themes)
-        self.__theme_box.setCurrentText(currentTheme)
+        self.__theme_box.setCurrentText(current_theme)
         layout.addWidget(self.__theme_box, row, 1, 1, 2)
         return row + 1
 
@@ -183,7 +184,7 @@ class SettingsDialog(QDialog):
             if not 1 <= port <= 65535:
                 raise ValueError
         except ValueError:
-            QMessageBox.warning(self, "Invalid Port", "Port must be an integer between 1 and 65535.")
+            QMessageBox.warning(self, "Invalid Port","Port must be an integer between 1 and 65535.")
             return
         rate: float = round(self.__rate_spin_box.value(), 2)
         self.__config.port = port_text

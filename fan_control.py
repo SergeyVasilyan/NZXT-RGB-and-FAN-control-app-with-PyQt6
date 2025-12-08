@@ -4,16 +4,16 @@
 import json
 import os
 import re
+import socket
 import sys
 import time
-import socket
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, override
 
-from liquidctl.driver.smart_device import SmartDevice2
 import requests
 import src.utils.common as utils
+from liquidctl.driver.smart_device import SmartDevice2
 from PySide6.QtCore import (
     QEvent,
     QRect,
@@ -64,6 +64,7 @@ class DeviceInfo:
 
 class Worker(QThread):
     """Worker thread that poll sensors temperature from the server at given rate."""
+
     new_info: Signal = Signal(DeviceInfo, DeviceInfo)
 
     def __init__(self, config: ServerConfiguration, temp_source: dict[str, str],
@@ -226,7 +227,7 @@ class MainWindow(QMainWindow):
         message: str = "Current configuration successfully imported."
         icon: QSystemTrayIcon.MessageIcon = QSystemTrayIcon.MessageIcon.Information
         try:
-            with open(filename, "r") as f:
+            with open(filename) as f:
                 configuration = json.load(f)
         except Exception as _:
             message = f"Failed to import '{filename}' configuration.\nPlease choose valid file."
@@ -250,7 +251,7 @@ class MainWindow(QMainWindow):
             return
         self.__load_configuration(self.__settings)
         settings: dict[str, Any] = {}
-        with open(self.__settings, "r") as f:
+        with open(self.__settings) as f:
             settings = json.load(f)
         AppConfig.set("start_minimized", settings.get("start_minimized", False))
         AppConfig.set("minimize_on_exit", settings.get("minimize_on_exit", False))
@@ -358,7 +359,7 @@ class MainWindow(QMainWindow):
             "Minimized to Tray",
             "Your app is still running in the background.",
             QSystemTrayIcon.MessageIcon.Information,
-            3000
+            3000,
         )
 
     @override

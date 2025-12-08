@@ -1,14 +1,56 @@
+lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+show-fixes = true
+line-length = 100
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+src = [
+    "src"
+]
 lint.select = [
     "E",
+    "F",
+    "UP",
     "W",
+    "D",
+    "N",
+#    "C90",
+    "RET",
+    "SLF",
+    "ARG",
+    "NPY",
+    "ISC",
+    "ICN",
+    "C4",
+    "A",
+    "I",
+    "COM",
+    "G",
+#    "T",
+    "Q",
+    "RSE",
+    "INT"
 ]
 lint.ignore = [
-    "E501",
+    "G004"
 ]
-line-length = 100
-fix = true
-
-[format]
-quote-style = "double"
-indent-style = "space"
-line-ending = "lf"

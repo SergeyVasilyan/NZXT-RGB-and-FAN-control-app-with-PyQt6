@@ -1,6 +1,6 @@
 """MenuBar of app."""
 
-from typing import Callable
+from collections.abc import Callable
 
 import src.utils.common as utils
 from PySide6.QtCore import QEvent
@@ -13,7 +13,7 @@ from src.widgets.theme_manager import ThemeManager
 
 
 class MenuBar(QMenuBar):
-    """Menu Bar"""
+    """Menu Bar."""
 
     def __init__(self, server_config: ServerConfiguration, export_configuration: Callable,
                        load_configuration: Callable, theme_manager: ThemeManager,

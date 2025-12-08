@@ -2,15 +2,24 @@
 
 from dataclasses import dataclass
 from typing import override
-from typing_extensions import Any
 
+import src.utils.common as utils
 from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt, Signal, Slot
 from PySide6.QtGui import QColor, QGuiApplication, QIcon, QMouseEvent, QPainter, QPaintEvent, QPen
-from PySide6.QtWidgets import QComboBox, QDialog, QGridLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget
-
+from PySide6.QtWidgets import (
+    QComboBox,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 from src.utils.observable_dict import ObservableDict
-import src.utils.common as utils
 from src.utils.signals import GLOBAL_SIGNALS
+from typing_extensions import Any
+
 
 @dataclass(order=True, frozen=False)
 class FanCurvePoint:
@@ -20,7 +29,7 @@ class FanCurvePoint:
     percent: float
 
     def clamp(self, t_min: float, t_max: float, p_min: float, p_max: float) -> None:
-        """Clampt new values."""
+        """Clamp new values."""
         self.temperature = max(t_min, min(t_max, self.temperature))
         self.percent = max(p_min, min(p_max, self.percent))
 
@@ -173,13 +182,17 @@ class FanCurveWidget(QWidget):
         painter.restore()
 
     def __draw_temperature_lines(self, painter: QPainter, rect: QRectF) -> None:
-        """Draw temeprature lines."""
+        """Draw temperature lines."""
         painter.save()
         painter.setPen(QPen(QColor(100, 100, 0), 2))
-        painter.drawLine(self.__to_screen(rect, FanCurvePoint(temperature=self.__t_min, percent=self.__t.percent)),
-                         self.__to_screen(rect, FanCurvePoint(temperature=self.__t_max, percent=self.__t.percent)))
-        painter.drawLine(self.__to_screen(rect, FanCurvePoint(temperature=self.__t.temperature, percent=self.__p_min)),
-                         self.__to_screen(rect, FanCurvePoint(temperature=self.__t.temperature, percent=self.__p_max)))
+        painter.drawLine(self.__to_screen(rect, FanCurvePoint(temperature=self.__t_min,
+                                                              percent=self.__t.percent)),
+                         self.__to_screen(rect, FanCurvePoint(temperature=self.__t_max,
+                                                              percent=self.__t.percent)))
+        painter.drawLine(self.__to_screen(rect, FanCurvePoint(temperature=self.__t.temperature,
+                                                              percent=self.__p_min)),
+                         self.__to_screen(rect, FanCurvePoint(temperature=self.__t.temperature,
+                                                              percent=self.__p_max)))
         painter.restore()
 
     def __draw_points(self, painter: QPainter, rect: QRectF) -> None:
@@ -332,7 +345,7 @@ class FanCurve(QWidget):
 
     @classmethod
     def convert_str_to_points(cls, text: str) -> list[FanCurvePoint]:
-        """Convert string to Fan Curver points."""
+        """Convert string to Fan Curve points."""
         if cls.__list_separator not in text or cls.__point_separator not in text:
             return []
         points: list[FanCurvePoint] = []
@@ -385,7 +398,8 @@ class FanCurve(QWidget):
             and self.__channel in self.__sources[self.__device_id]:
             current_text = self.__sources[self.__device_id][self.__channel]
             source_box.setCurrentText(current_text)
-        layout.addWidget(utils.create_label(self.__channel, target="channel"), 0, 0, alignment=Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(utils.create_label(self.__channel, target="channel"), 0, 0,
+                                            alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(source_box, 0, 1, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.__rpm_label, 0, 2, alignment=Qt.AlignmentFlag.AlignRight)
         self.__update_fan_source(current_text)

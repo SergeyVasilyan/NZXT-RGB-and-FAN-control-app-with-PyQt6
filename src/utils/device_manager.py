@@ -3,10 +3,10 @@
 import atexit
 from dataclasses import dataclass
 from typing import override
-from PySide6.QtCore import QThread, Slot
+
 from liquidctl.driver import find_liquidctl_devices
 from liquidctl.driver.smart_device import SmartDevice2
-
+from PySide6.QtCore import QThread, Slot
 from src.utils.signals import GLOBAL_SIGNALS
 from src.widgets.settings_dialog import ServerConfiguration
 
@@ -41,7 +41,7 @@ class Worker(QThread):
     def __convert_devices_to_dictionary(self, devices: list[SmartDevice2]) -> None:
         """Convert list of devices to usable dictionary."""
         for device_id, device in enumerate(devices):
-            channels: list[str] = list(device._speed_channels.keys())
+            channels: list[str] = list(device._speed_channels.keys()) #noqa: SLF001
             information: DeviceInformation = DeviceInformation(device=device, channels={})
             for channel in channels:
                 information.channels[channel] = DeviceChannel(speed=0, rpm=0)

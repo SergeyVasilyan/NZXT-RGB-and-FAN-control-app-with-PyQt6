@@ -1,7 +1,8 @@
 """Common functions between all modules."""
 
-from enum import StrEnum
 import os
+from enum import StrEnum
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
@@ -23,6 +24,7 @@ class PathManager(StrEnum):
     PRESETS = os.path.join(SOURCE, "presets")
 
 def create_separator(horizontal: bool=False) -> QFrame:
+    """Create separator."""
     separator: QFrame = QFrame()
     separator.setFrameShape(QFrame.Shape.HLine if horizontal else QFrame.Shape.VLine)
     separator.setFrameShadow(QFrame.Shadow.Sunken)

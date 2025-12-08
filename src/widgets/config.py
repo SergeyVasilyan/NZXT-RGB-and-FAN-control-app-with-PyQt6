@@ -1,4 +1,4 @@
-"""Singleton app settings"""
+"""Singleton app settings."""
 
 from typing import Any
 
@@ -7,6 +7,7 @@ from PySide6.QtCore import QSettings
 
 class AppConfig:
     """Singleton app settings."""
+
     _settings: QSettings = QSettings("FOSFC", "free-fan-control")
 
     @classmethod
