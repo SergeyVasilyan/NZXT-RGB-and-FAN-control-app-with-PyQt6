@@ -1,4 +1,3 @@
-ruff>=0.6.0
 pyside6>=6.10.0
 liquidctl==1.15.0
 pywin32==311
