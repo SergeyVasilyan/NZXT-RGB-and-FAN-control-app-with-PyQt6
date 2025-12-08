@@ -2,8 +2,8 @@
 
 from typing import Any
 
-from liquidctl.driver import smart_device
 import src.utils.common as utils
+from liquidctl.driver import smart_device
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 from src.utils.observable_dict import ObservableDict
@@ -34,7 +34,7 @@ class DeviceSection(QHBoxLayout):
         widget: QWidget = QWidget()
         widget.setVisible(False)
         layout: QVBoxLayout = QVBoxLayout(widget)
-        channels: list[str] = list(device._speed_channels.keys())
+        channels: list[str] = list(device._speed_channels.keys()) #noqa :SLF001
         for channel in channels:
             layout.addWidget(FanCurve(self.__temps, self.__sources, device_id, channel,
                                       points=self.__curves.get(device_id, {}).get(channel, None),
