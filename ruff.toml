@@ -1,0 +1,14 @@
+lint.select = [
+    "E",
+    "W",
+]
+lint.ignore = [
+    "E501",
+]
+line-length = 100
+fix = true
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
