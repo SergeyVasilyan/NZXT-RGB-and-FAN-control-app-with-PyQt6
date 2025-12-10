@@ -30,8 +30,8 @@ class FanCurvePoint:
 
     def clamp(self, t_min: float, t_max: float, p_min: float, p_max: float) -> None:
         """Clamp new values."""
-        self.temperature = max(t_min, min(t_max, self.temperature))
-        self.percent = max(p_min, min(p_max, self.percent))
+        self.temperature = round(max(t_min, min(t_max, self.temperature)), 2)
+        self.percent = round(max(p_min, min(p_max, self.percent)), 2)
 
 
 class FanCurveWidget(QWidget):
@@ -181,34 +181,40 @@ class FanCurveWidget(QWidget):
             painter.drawLine(self.__to_screen(rect, points[i]), self.__to_screen(rect, points[i+1]))
         painter.restore()
 
+    def __draw_filled_point(self, painter: QPainter, rect: QRectF, point: FanCurvePoint,
+                                  color: QColor) -> QPointF:
+        """Draw filled point and return center."""
+        painter.setPen(QPen(color, 2))
+        painter.setBrush(color)
+        center: QPointF = self.__to_screen(rect, point)
+        painter.drawEllipse(center, self.__point_radius, self.__point_radius)
+        return center
+
+    def __draw_text_above_point(self, painter: QPainter, rect: QRectF, label: QLabel,
+                                      center: QPointF, color: QColor) -> None:
+        """Draw text above given point."""
+        painter.setPen(QPen(color, 1))
+        label_width: int = label.fontMetrics().boundingRect(label.text()).width()
+        x: int = int(center.x() + self.__point_radius + 2)
+        y: int = int(center.y() - self.__point_radius - 2)
+        painter.drawText(min(x, int(rect.width() - (label_width / 2))), y, label.text())
+
     def __draw_temperature_lines(self, painter: QPainter, rect: QRectF) -> None:
         """Draw temperature lines."""
         painter.save()
-        painter.setPen(QPen(QColor(100, 100, 0), 2))
-        painter.drawLine(self.__to_screen(rect, FanCurvePoint(temperature=self.__t_min,
-                                                              percent=self.__t.percent)),
-                         self.__to_screen(rect, FanCurvePoint(temperature=self.__t_max,
-                                                              percent=self.__t.percent)))
-        painter.drawLine(self.__to_screen(rect, FanCurvePoint(temperature=self.__t.temperature,
-                                                              percent=self.__p_min)),
-                         self.__to_screen(rect, FanCurvePoint(temperature=self.__t.temperature,
-                                                              percent=self.__p_max)))
+        label: QLabel = QLabel(f"[T: {self.__t.temperature}, P: {self.__t.percent}]")
+        color: QColor = QColor.fromHsl(int(100 - self.__t.temperature), 255, 125)
+        center: QPointF = self.__draw_filled_point(painter, rect, self.__t, color)
+        self.__draw_text_above_point(painter, rect, label, center, color)
         painter.restore()
 
     def __draw_points(self, painter: QPainter, rect: QRectF) -> None:
         """Draw points."""
         painter.save()
-        for index, point in enumerate(self.__points):
-            center: QPointF = self.__to_screen(rect, point)
-            painter.setBrush(self.__point_fill)
-            painter.setPen(QPen(self.__point_border, 1))
-            painter.drawEllipse(center, self.__point_radius, self.__point_radius)
-            painter.setPen(QPen(self.__axis, 1))
+        for index, point in enumerate(self.__points, start=1):
+            center: QPointF = self.__draw_filled_point(painter, rect, point, self.__point_fill)
             label: QLabel = QLabel(f"{index} [T: {point.temperature}, P: {point.percent}]")
-            label_width: int = label.fontMetrics().boundingRect(label.text()).width()
-            x: int = int(center.x() + self.__point_radius + 2)
-            y: int = int(center.y() - self.__point_radius - 2)
-            painter.drawText(min(x, int(rect.width() - (label_width / 2))), y, label.text())
+            self.__draw_text_above_point(painter, rect, label, center, self.__axis)
         painter.restore()
 
     def __draw_labels(self, painter: QPainter, rect: QRectF) -> None:

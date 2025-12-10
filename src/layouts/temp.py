@@ -37,9 +37,10 @@ class TemperatureSection(QHBoxLayout):
             new_source = f"{source} {new_source}"
         self.__temp_source[source] = new_source
 
-    def __create_header(self, source: str) -> QHBoxLayout:
-        """Create header layout."""
-        header_layout: QHBoxLayout = QHBoxLayout()
+    def __create_temp_layout(self, source: str, temps: ObservableDict,
+                                   names: ObservableDict) -> QVBoxLayout:
+        """Create Temp layout."""
+        temp_layout: QVBoxLayout = QVBoxLayout()
         source_label: QLabel = utils.create_label(source, size="large", target="source")
         source_box: QComboBox = QComboBox()
         sources: list[str] = ["Max", "Average", "Package"]
@@ -49,21 +50,14 @@ class TemperatureSection(QHBoxLayout):
         source_box.currentTextChanged.connect(lambda new_source: self.__update_temp_source(source,
                                                                                         new_source))
         source_box.setCurrentText(" ".join(self.__temp_source[source].split(" ")[1:]))
-        header_layout.addWidget(source_label, alignment=Qt.AlignmentFlag.AlignLeft)
-        header_layout.addWidget(source_box, alignment=Qt.AlignmentFlag.AlignRight)
-        return header_layout
-
-    def __create_temp_layout(self, source: str, temps: ObservableDict,
-                                   names: ObservableDict) -> QVBoxLayout:
-        """Create Temp layout."""
-        temp_layout: QVBoxLayout = QVBoxLayout()
         name_label: QLabel = utils.create_label("N/A", size="small", target="source")
         temp_label: QLabel = utils.create_label(f"{temps[source]} C", size="medium")
         temps.value_changed.connect(lambda temps: self.__update_temp_label(temps, source,
                                                                            temp_label))
         names.value_changed.connect(lambda names: name_label.setText(names.get(source, "N/A")))
-        temp_layout.addLayout(self.__create_header(source))
-        temp_layout.addWidget(name_label, alignment=Qt.AlignmentFlag.AlignHCenter)
-        temp_layout.addWidget(temp_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+        temp_layout.addWidget(source_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        temp_layout.addWidget(name_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        temp_layout.addWidget(temp_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        temp_layout.addWidget(source_box, alignment=Qt.AlignmentFlag.AlignCenter)
         temp_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         return temp_layout
